@@ -1499,7 +1499,7 @@ int dist;
 				   x_maze_max - 1, y_maze_max - 1)) {
 	/* only outermost 2 columns and/or rows may be truncated due to edge */
 	if (dist < (7 - 2))
-	    panic("mkinvpos: <%d,%d> (%d) off map edge!", x, y, dist);
+	    pline("mkinvpos: <%d,%d> (%d) off map edge - proceed with caution!", x, y, dist);
 	return;
     }
 
