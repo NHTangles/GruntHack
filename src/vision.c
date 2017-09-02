@@ -166,7 +166,7 @@ does_block(x,y,lev)
 			    (lev->doormask & (D_CLOSED|D_LOCKED|D_TRAPPED) )))
 	return 1;
 
-    if (lev->typ == CLOUD || lev->typ == WATER ||
+    if (lev->typ == CLOUD || lev->typ == WATER || lev->typ == POISONCLOUD ||
 			(lev->typ == MOAT && Underwater))
 	return 1;
 
