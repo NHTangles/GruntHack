@@ -50,6 +50,7 @@ compile
 /src/nhwin.a
 /src/grunthack
 /src/Makefile
+/src/Makefile.local
 /src/Sysunix
 /src/config.h-t
 /src/hack.h-t
