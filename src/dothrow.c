@@ -1344,6 +1344,7 @@ register struct obj   *obj;
 	register int	disttmp; /* distance modifier */
 	int otyp = obj->otyp;
 	boolean guaranteed_hit = (u.uswallow && mon == u.ustuck);
+	int dieroll;
 
 	/* Differences from melee weapons:
 	 *
@@ -1435,6 +1436,7 @@ register struct obj   *obj;
 	    return(0);
 	}
 
+	dieroll = rnd(20);
 	if (mon->mtame && mon->mcanmove &&
 		(!is_animal(mon->data)) && (!mindless(mon->data)) &&
 		could_use_item(mon, obj, FALSE)) {
@@ -1489,13 +1491,13 @@ register struct obj   *obj;
 		tmp += weapon_hit_bonus(obj);
 	    }
 
-	    if (tmp >= rnd(20)) {
+	    if (tmp >= dieroll) {
 		if(!u.uconduct.weaphit++)
 		    #ifdef LIVELOG
   	            livelog_conduct("hit with a wielded weapon for the first time")
                     #endif
                     ;
-		if (hmon(mon,obj,1)) {	/* mon still alive */
+		if (hmon(mon,obj,1,dieroll)) {	/* mon still alive */
 		    cutworm(mon, bhitpos.x, bhitpos.y, obj);
 		}
 		exercise(A_DEX, TRUE);
@@ -1551,11 +1553,11 @@ register struct obj   *obj;
 
 	} else if (otyp == HEAVY_IRON_BALL) {
 	    exercise(A_STR, TRUE);
-	    if (tmp >= rnd(20)) {
+	    if (tmp >= dieroll) {
 		int was_swallowed = guaranteed_hit;
 
 		exercise(A_DEX, TRUE);
-		if (!hmon(mon,obj,1)) {		/* mon killed */
+		if (!hmon(mon,obj,1,dieroll)) {		/* mon killed */
 		    if (was_swallowed && !u.uswallow && obj == uball)
 			return 1;	/* already did placebc() */
 		}
@@ -1565,9 +1567,9 @@ register struct obj   *obj;
 
 	} else if (otyp == BOULDER) {
 	    exercise(A_STR, TRUE);
-	    if (tmp >= rnd(20)) {
+	    if (tmp >= dieroll) {
 		exercise(A_DEX, TRUE);
-		(void) hmon(mon,obj,1);
+		(void) hmon(mon,obj,1,dieroll);
 	    } else {
 		tmiss(obj, mon);
 	    }
@@ -1575,7 +1577,7 @@ register struct obj   *obj;
 	} else if ((otyp == EGG || otyp == CREAM_PIE ||
 		    otyp == BLINDING_VENOM || otyp == ACID_VENOM)) {
 	    if ((guaranteed_hit || ACURR(A_DEX) > rnd(25))) {
-	        (void) hmon(mon, obj, 1);
+	        (void) hmon(mon, obj, 1, dieroll);
 	        return 1;	/* hmon used it up */
 	    }
 	    tmiss(obj, mon);
@@ -1627,8 +1629,8 @@ register struct obj   *obj;
 		Tobjnam(obj, "vanish"), s_suffix(mon_nam(mon)),
 		is_animal(u.ustuck->data) ? "entrails" : "currents");
 	} else {
-	    if (tmp >= rnd(20)) {
-		if (hmon(mon,obj,1)) {	/* mon still alive */
+	    if (tmp >= dieroll) {
+		if (hmon(mon,obj,1,dieroll)) {	/* mon still alive */
 		    cutworm(mon, bhitpos.x, bhitpos.y, obj);
 		}
 		passive_obj(mon, obj, (struct attack *)0);
