@@ -803,8 +803,7 @@ boolean FDECL((*allow), (OBJ_P));/* allow function */
 		    add_menu(win, obj_to_glyph(curr), &any,
 			    qflags & USE_INVLET ? curr->invlet : 0,
 			    def_oc_syms[(int)objects[curr->otyp].oc_class],
-                            iflags.use_menu_glyphs ? ATR_OBJREF : ATR_NONE,
-			    doname(curr), MENU_UNSELECTED);
+                            ATR_NONE, doname(curr), MENU_UNSELECTED);
 		}
 	    }
 	    pack++;
