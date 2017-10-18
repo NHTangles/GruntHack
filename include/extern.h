@@ -2524,6 +2524,10 @@ E int FDECL(destroy_mitem, (struct monst *,int,int));
 E int FDECL(resist, (struct monst *,CHAR_P,int,int));
 E void NDECL(makewish);
 
+/* ### termcap.c ### */
+E void FDECL(term_start_bgcolor, (int));
+E void NDECL(term_end_bgcolor);
+
 #endif /* !MAKEDEFS_C && !LEV_LEX_C */
 
 #undef E

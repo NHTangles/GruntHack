@@ -280,7 +280,7 @@ typedef xchar	boolean;		/* 0 or 1 */
 #endif
 
 #ifdef WIN32
-#define snprintf sprintf_s
+#define snprintf _snprintf
 #else
 #if defined(MSDOS)
 #define snprintf(out,n,fmt,args...) sprintf(out,fmt,args)

@@ -2558,6 +2558,7 @@ goodfruit:
 		return;
 	}
 
+#ifdef CURSES_GRAPHICS
 
 	/* WINCAP2
 	 * petattr:string */
@@ -2571,7 +2572,7 @@ goodfruit:
 		} else if (negated) bad_negation(fullname, TRUE);
 		return;
 	}
-
+#endif
 
 	/* WINCAP2
 	 * windowborders:n */
