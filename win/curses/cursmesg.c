@@ -436,7 +436,7 @@ curses_message_win_getline(const char *prompt, char *answer, int buffer)
         wmove(win, my, mx);
         curs_set(1);
         wrefresh(win);
-        ch = getch();
+        ch = wgetch(win);
         curs_set(0);
         switch(ch) {
         case '\033': /* DOESCAPE */

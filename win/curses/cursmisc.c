@@ -39,7 +39,7 @@ curses_read_char()
 {
     int ch, tmpch;
 
-    ch = getch();
+    ch = wgetch(curses_get_nhwin(MAP_WIN));
     tmpch = ch;
     ch = curses_convert_keys(ch);
 
@@ -823,13 +823,13 @@ parse_escape_sequence(void)
 
     timeout(10);
 
-    ret = getch();
+    ret = wgetch(curses_get_nhwin(MAP_WIN));
 
     if (ret != ERR) {           /* Likely an escape sequence */
         if (((ret >= 'a') && (ret <= 'z')) || ((ret >= '0') && (ret <= '9'))) {
             ret |= 0x80;        /* Meta key support for most terminals */
         } else if (ret == 'O') {        /* Numeric keypad */
-            ret = getch();
+            ret = wgetch(curses_get_nhwin(MAP_WIN));
             if ((ret != ERR) && (ret >= 112) && (ret <= 121)) {
                 ret = ret - 112 + '0';  /* Convert to number */
             } else {

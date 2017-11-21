@@ -225,7 +225,10 @@ curses_character_input_dialog(const char *prompt, const char *choices,
     curses_stupid_hack = 0;
 
     while (1) {
-        answer = getch();
+        if (askwin)
+            answer = wgetch(askwin);
+        else
+            answer = wgetch(curses_get_nhwin(MAP_WIN));
 
         if (answer == ERR) {
             answer = def;
@@ -366,7 +369,7 @@ curses_ext_cmd()
         }
 
         wrefresh(extwin);
-        letter = getch();
+        letter = wgetch(extwin);
         prompt_width = strlen(cur_choice);
         matches = 0;
 
@@ -1074,7 +1077,7 @@ menu_get_selections(WINDOW * win, nhmenu *menu, int how)
     menu_display_page(menu, win, 1);
 
     while (!dismiss) {
-        curletter = getch();
+        curletter = wgetch(win);
 
         if (curletter == ERR) {
             num_selected = -1;
@@ -1124,7 +1127,7 @@ menu_get_selections(WINDOW * win, nhmenu *menu, int how)
                 count = curses_get_count(curletter - '0');
                 touchwin(win);
                 refresh();
-                curletter = getch();
+                curletter = wgetch(win);
                 if (count > 0) {
                     count_letter = curletter;
                 }
