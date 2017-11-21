@@ -1,6 +1,6 @@
 /* vim:set cin ft=c sw=4 sts=4 ts=8 et ai cino=Ls\:0t0(0 : -*- mode:c;fill-column:80;tab-width:8;c-basic-offset:4;indent-tabs-mode:nil;c-file-style:"k&r" -*-*/
 
-#include "curses.h"
+#include "uncursed.h"
 #include "hack.h"
 #include "patchlevel.h"
 #include "color.h"
@@ -87,6 +87,9 @@ init_nhwindows(int* argcp, char** argv)
 void
 curses_init_nhwindows(int *argcp, char **argv)
 {
+    initialize_uncursed(argcp, argv);
+    uncursed_set_title("GruntHack");
+
 #ifdef PDCURSES
     char window_title[BUFSZ];
 #endif
@@ -741,7 +744,7 @@ delay_output()  -- Causes a visible delay of 50ms in the output.
 void
 curses_delay_output()
 {
-    napms(50);
+    nanosleep(&(struct timespec){ .tv_nsec = 50 * 1000 * 1000}, NULL);
 }
 
 /*

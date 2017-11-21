@@ -56,6 +56,7 @@ static	const char	SCCS_Id[] = "@(#)makedefs.c\t3.4\t2002/02/03";
 #define DATE_FILE	"date.h"
 #define MONST_FILE	"pm.h"
 #define ONAME_FILE	"onames.h"
+#define VERINFO_FILE	"verinfo.h"
 #ifndef OPTIONS_FILE
 #define OPTIONS_FILE	"options"
 #endif
@@ -149,7 +150,7 @@ void FDECL(do_makedefs, (char *));
 void NDECL(do_objs);
 void NDECL(do_data);
 void NDECL(do_dungeon);
-void NDECL(do_date);
+void FDECL(do_date, (int));
 void NDECL(do_options);
 void NDECL(do_monstr);
 void NDECL(do_permonst);
@@ -292,8 +293,17 @@ char	*options;
 		case 'M':	do_monstr();
 				break;
 		case 'v':
-		case 'V':	do_date();
+		case 'V':	do_date(0);
 				do_options();
+				break;
+		case 'w':
+		case 'W':	do_date(1);
+				break;
+		case 't':
+		case 'T':	do_options();
+				break;
+		case 'a':
+		case 'A':	do_date(0);
 				break;
 		case 'p':
 		case 'P':	do_permonst();
@@ -541,7 +551,8 @@ const char *build_date;
 }
 
 void
-do_date()
+do_date(verinfo)
+int verinfo;
 {
 #ifdef KR1ED
 	long clocktim = 0;
@@ -555,7 +566,10 @@ do_date()
 #ifdef FILE_PREFIX
 	Strcat(filename,file_prefix);
 #endif
-	Sprintf(eos(filename), INCLUDE_TEMPLATE, DATE_FILE);
+	if (!verinfo)
+		Sprintf(eos(filename), INCLUDE_TEMPLATE, DATE_FILE);
+	else
+		Sprintf(eos(filename), INCLUDE_TEMPLATE, VERINFO_FILE);
 	if (!(ofp = fopen(filename, WRTMODE))) {
 		perror(filename);
 		exit(EXIT_FAILURE);
@@ -563,6 +577,7 @@ do_date()
 	Fprintf(ofp,"/*\tSCCS Id: @(#)date.h\t3.4\t2002/02/03 */\n\n");
 	Fprintf(ofp,Dont_Edit_Code);
 
+	if (!verinfo) {
 	(void) time(&clocktim);
 	Strcpy(cbuf, ctime(&clocktim));
 
@@ -571,6 +586,7 @@ do_date()
 	Fprintf(ofp,"#define BUILD_DATE \"%s\"\n", cbuf);
 	Fprintf(ofp,"#define BUILD_TIME (%ldL)\n", (long)clocktim);
 	Fprintf(ofp,"\n");
+	}
 #ifdef NHSTDC
 	ul_sfx = "UL";
 #else
@@ -590,9 +606,11 @@ do_date()
 		version.struct_sizes, ul_sfx);
 	Fprintf(ofp,"\n");
 	Fprintf(ofp,"#define VERSION_STRING \"%s\"\n", version_string(buf));
+	if (!verinfo) {
 	Fprintf(ofp,"#define VERSION_ID \\\n \"%s\"\n",
 		version_id_string(buf, cbuf));
 	Fprintf(ofp,"\n");
+	}
 #ifdef AMIGA
 	{
 	struct tm *tm = localtime((time_t *) &clocktim);

@@ -175,7 +175,7 @@ extern void curses_del_menu(winid wid);
 
 extern attr_t curses_color_attr(int nh_color, int bg_color);
 extern void curses_update_stats(void);
-extern void curses_decrement_highlight(void);
+extern void curses_decrement_highlights(boolean);
 
 /* cursinvt.c */
 
