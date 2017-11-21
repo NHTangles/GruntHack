@@ -375,17 +375,17 @@ curses_create_main_windows()
 void
 curses_init_nhcolors()
 {
-#ifdef TEXTCOLOR
     if (has_colors()) {
-        use_default_colors();
-        init_pair(1, COLOR_BLACK, -1);
-        init_pair(2, COLOR_RED, -1);
-        init_pair(3, COLOR_GREEN, -1);
-        init_pair(4, COLOR_YELLOW, -1);
-        init_pair(5, COLOR_BLUE, -1);
-        init_pair(6, COLOR_MAGENTA, -1);
-        init_pair(7, COLOR_CYAN, -1);
-        init_pair(8, -1, -1);
+        assume_default_colors(COLOR_WHITE, COLOR_BLACK);
+        init_pair(500, COLOR_BLACK, COLOR_BLACK);
+        init_pair(1, COLOR_BLACK, COLOR_BLACK);
+        init_pair(2, COLOR_RED, COLOR_BLACK);
+        init_pair(3, COLOR_GREEN, COLOR_BLACK);
+        init_pair(4, COLOR_YELLOW, COLOR_BLACK);
+        init_pair(5, COLOR_BLUE, COLOR_BLACK);
+        init_pair(6, COLOR_MAGENTA, COLOR_BLACK);
+        init_pair(7, COLOR_CYAN, COLOR_BLACK);
+        init_pair(8, COLOR_WHITE, COLOR_BLACK);
 
         {
             int i;
@@ -420,14 +420,14 @@ curses_init_nhcolors()
 
 
         if (COLORS >= 16) {
-            init_pair(9, COLOR_WHITE, -1);
-            init_pair(10, COLOR_RED + 8, -1);
-            init_pair(11, COLOR_GREEN + 8, -1);
-            init_pair(12, COLOR_YELLOW + 8, -1);
-            init_pair(13, COLOR_BLUE + 8, -1);
-            init_pair(14, COLOR_MAGENTA + 8, -1);
-            init_pair(15, COLOR_CYAN + 8, -1);
-            init_pair(16, COLOR_WHITE + 8, -1);
+            init_pair(9, COLOR_WHITE, COLOR_BLACK);
+            init_pair(10, COLOR_RED + 8, COLOR_BLACK);
+            init_pair(11, COLOR_GREEN + 8, COLOR_BLACK);
+            init_pair(12, COLOR_YELLOW + 8, COLOR_BLACK);
+            init_pair(13, COLOR_BLUE + 8, COLOR_BLACK);
+            init_pair(14, COLOR_MAGENTA + 8, COLOR_BLACK);
+            init_pair(15, COLOR_CYAN + 8, COLOR_BLACK);
+            init_pair(16, COLOR_WHITE + 8, COLOR_BLACK);
         }
 
         if (can_change_color()) {
@@ -471,7 +471,7 @@ curses_init_nhcolors()
                                   &orig_darkgray.g, &orig_darkgray.b);
                     init_color(CURSES_DARK_GRAY, 300, 300, 300);
                     /* just override black colorpair entry here */
-                    init_pair(1, CURSES_DARK_GRAY, -1);
+                    init_pair(1, CURSES_DARK_GRAY, COLOR_BLACK);
                 }
 # endif
             } else {
@@ -479,7 +479,6 @@ curses_init_nhcolors()
             }
         }
     }
-#endif
 }
 
 
@@ -1114,7 +1113,6 @@ curses_display_splash_window()
 void
 curses_cleanup()
 {
-#ifdef TEXTCOLOR
     if (has_colors() && can_change_color()) {
         init_color(COLOR_YELLOW, orig_yellow.r, orig_yellow.g, orig_yellow.b);
         init_color(COLOR_WHITE, orig_white.r, orig_white.g, orig_white.b);
@@ -1141,5 +1139,4 @@ curses_cleanup()
 # endif
         }
     }
-#endif
 }

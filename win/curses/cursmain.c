@@ -194,19 +194,16 @@ curses_get_nh_event()
         curses_last_messages();
         doredraw();
     }
-#endif
-#ifdef NCURSES_VERSION          /* Is there a better way to detect ncurses? */
-    if (is_term_resized(term_rows, term_cols)) {
-        if (!isendwin()) {
-            endwin();
-        }
+#else
+    int old_term_rows = term_rows;
+    int old_term_cols = term_cols;
+    getmaxyx(base_term, term_rows, term_cols);
+    if (term_rows == old_term_rows && term_cols == old_term_cols)
+        return;
 
-        refresh();
-        getmaxyx(base_term, term_rows, term_cols);
-        curses_create_main_windows();
-        curses_last_messages();
-        doredraw();
-    }
+    curses_create_main_windows();
+    curses_last_messages();
+    doredraw();
 #endif
 }
 

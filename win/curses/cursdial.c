@@ -129,15 +129,34 @@ curses_line_input_dialog(const char *prompt, char *answer, int buffer)
         free(tmpstr);
     }
 
-    echo();
     curs_set(1);
-    wgetnstr(askwin, input, buffer - 1);
+    int answer_ch;
+    int buffer_cnt = 0;
+    while (1) {
+        answer_ch = wgetch(askwin);
+        if (answer_ch == KEY_ESCAPE) {
+            input[0] = '\0';
+            break;
+        }
+
+        if (answer_ch == '\r' || answer_ch == '\n' ||
+            answer_ch == KEY_ESCAPE || answer_ch == '\0')
+            answer_ch = '\0';
+
+        if (answer_ch >= 256 || buffer_cnt == buffer)
+            continue;
+
+        input[buffer_cnt] = answer_ch;
+        buffer_cnt++;
+        if (!answer_ch)
+            break;
+        waddch(askwin, answer_ch);
+    }
     curs_set(0);
     strcpy(answer, input);
     werase(bwin);
     delwin(bwin);
     curses_destroy_win(askwin);
-    noecho();
 }
 
 

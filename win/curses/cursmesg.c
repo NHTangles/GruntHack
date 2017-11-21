@@ -539,7 +539,6 @@ directional_scroll(winid wid, int nlines)
         s_bottom = wh - 1;
     }
     scrollok(win, TRUE);
-    wsetscrreg(win, s_top, s_bottom);
     wscrl(win, nlines);
     scrollok(win, FALSE);
     if (wid == MESSAGE_WIN) {
