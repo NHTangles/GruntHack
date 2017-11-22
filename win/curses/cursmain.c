@@ -746,7 +746,7 @@ curses_delay_output()
 {
     /* refreshing the whole display is a waste of time,
        but that's why we're here */
-    refresh();
+    wrefresh(mapwin);
     nanosleep(&(struct timespec){ .tv_nsec = 50 * 1000 * 1000}, NULL);
 }
 
