@@ -554,11 +554,23 @@ curses_print_glyph(winid wid, XCHAR_P x, XCHAR_P y, int glyph)
     int color;
     unsigned int special;
     int attr = -1;
+    int colors = 8;
+    if (COLORS >= 16)
+        colors = 16;
 
     /* map glyph to character and color */
     mapglyph(glyph, &ch, &color, &special, x, y);
     if ((special & MG_PET) && iflags.hilite_pet) {
         attr = iflags.wc2_petattr;
+        /* Check color attributes */
+        int i;
+        for (i = 0; i < 8; i++) {
+            if (attr & curses_color_attr(0, i)) {
+                attr &= ~curses_color_attr(0, i);
+                color += i * colors;
+                break;
+            }
+        }
     }
     if ((special & MG_DETECT) && iflags.use_inverse) {
         attr = A_REVERSE;
@@ -568,10 +580,6 @@ curses_print_glyph(winid wid, XCHAR_P x, XCHAR_P y, int glyph)
     }
 
     if (wid == NHW_MAP) {
-        int colors = 8;
-        if (COLORS >= 16)
-            colors = 16;
-
         if ((special & MG_STAIRS) && iflags.hilite_hidden_stairs)
             color += COLOR_RED * colors;
         else if ((special & MG_OBJPILE) && iflags.hilite_obj_piles)

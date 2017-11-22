@@ -2567,7 +2567,7 @@ goodfruit:
 		op = string_for_opt(opts, negated);
 		if (op && !negated) {
 		    iflags.wc2_petattr = curses_read_attrs(op);
-		    if (!curses_read_attrs(op))
+		    if (!iflags.wc2_petattr)
 		    	badoption(opts);
 		} else if (negated) bad_negation(fullname, TRUE);
 		return;

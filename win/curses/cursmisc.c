@@ -655,41 +655,54 @@ curses_convert_attr(int attr)
 
 
 /* Map letter attributes from a string to bitmask.  Return mask on
-success, or 0 if not found */
+   success, or 0 if not found */
+
+struct strtoattr {
+    const char *str;
+    int attr; /* color number for colors */
+    boolean color; /* background color */
+};
+
+static const struct strtoattr str_attrs[] = {
+    {"blink", A_BLINK, FALSE},
+    {"bold", A_BOLD, FALSE},
+    {"inverse", A_REVERSE, FALSE},
+    {"reverse", A_REVERSE, FALSE},
+#ifdef A_ITALIC
+    {"italic", A_ITALIC, FALSE},
+#endif
+    {"underline", A_UNDERLINE, FALSE},
+/*  {"black", COLOR_BLACK, TRUE}, pointless */
+    {"red", COLOR_RED, TRUE},
+    {"green", COLOR_GREEN, TRUE},
+    {"yellow", COLOR_YELLOW, TRUE},
+    {"blue", COLOR_BLUE, TRUE},
+    {"magenta", COLOR_MAGENTA, TRUE},
+    {"cyan", COLOR_CYAN, TRUE},
+    {"white", COLOR_WHITE, TRUE},
+    {NULL, 0, FALSE},
+};
 
 int
 curses_read_attrs(char *attrs)
 {
     int retattr = 0;
-
-    if (strchr(attrs, 'b') || strchr(attrs, 'B')) {
-        retattr = retattr | A_BOLD;
+    boolean got_color = FALSE;
+    char *cur_attr = NULL;
+    while ((cur_attr = strtok(cur_attr ? NULL : attrs, "&"))) {
+        const struct strtoattr *str_attr;
+        for (str_attr = str_attrs; str_attr->str; str_attr++) {
+            if (!strcmpi(cur_attr, str_attr->str)) {
+                if (!str_attr->color)
+                    retattr |= str_attr->attr;
+                else if (!got_color) {
+                    got_color = TRUE;
+                    retattr |= curses_color_attr(0, str_attr->attr);
+                }
+                break;
+            }
+        }
     }
-    if (strchr(attrs, 'i') || strchr(attrs, 'I')) {
-        retattr = retattr | A_REVERSE;
-    }
-    if (strchr(attrs, 'u') || strchr(attrs, 'U')) {
-        retattr = retattr | A_UNDERLINE;
-    }
-    if (strchr(attrs, 'k') || strchr(attrs, 'K')) {
-        retattr = retattr | A_BLINK;
-    }
-#ifdef A_ITALIC
-    if (strchr(attrs, 't') || strchr(attrs, 'T')) {
-        retattr = retattr | A_ITALIC;
-    }
-#endif
-#ifdef A_RIGHTLINE
-    if (strchr(attrs, 'r') || strchr(attrs, 'R')) {
-        retattr = retattr | A_RIGHTLINE;
-    }
-#endif
-#ifdef A_LEFTLINE
-    if (strchr(attrs, 'l') || strchr(attrs, 'L')) {
-        retattr = retattr | A_LEFTLINE;
-    }
-#endif
-
     return retattr;
 }
 
