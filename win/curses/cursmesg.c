@@ -532,6 +532,13 @@ directional_scroll(winid wid, int nlines)
         return;
     }
     if (border) {
+        /* Wipe out the top or bottom line to avoid having
+           box characters bleed into the main message area. */
+        if (nlines < 0)
+            wmove(win, 0, 0);
+        else
+            wmove(win, wh + 1, 0);
+        wclrtoeol(win);
         s_top = 1;
         s_bottom = wh;
     } else {
