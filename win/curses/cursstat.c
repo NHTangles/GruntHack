@@ -373,10 +373,24 @@ static void
 draw_bar(boolean is_hp, int cur, int max, const char *title)
 {
     WINDOW *win = curses_get_nhwin(STATUS_WIN);
+    int color = hpen_color(is_hp, cur, max);
+    int invcolor = color & 7;
+
+    /* Colors */
+    attr_t fillattr, attr;
+
+    fillattr = curses_color_attr(color, invcolor);
+    attr = curses_color_attr(color, 0);
 
 #ifdef STATUS_COLORS
     if (!iflags.hitpointbar) {
-        wprintw(win, "%s", !title ? "---" : title);
+        if (title)
+            wprintw(win, "%s", title);
+        else {
+            wattron(win, attr);
+            wprintw(win, "%d(%d)", cur, max);
+            wattroff(win, attr);
+        }
         return;
     }
 #endif
@@ -387,14 +401,6 @@ draw_bar(boolean is_hp, int cur, int max, const char *title)
         int len = 5;
         sprintf(buf, "%*d / %-*d", len, cur, len, max);
     }
-
-    /* Colors */
-    attr_t fillattr, attr;
-    int color = hpen_color(is_hp, cur, max);
-    int invcolor = color & 7;
-
-    fillattr = curses_color_attr(color, invcolor);
-    attr = curses_color_attr(color, 0);
 
     /* Figure out how much of the bar to fill */
     int fill = 0;
