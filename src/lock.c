@@ -551,7 +551,6 @@ doopen_indir(x, y)		/* try to open a door in direction u.dx/u.dy */
 	}
 	else
 #endif
-
 	if(!get_adjacent_loc((char *)0, (char *)0, u.ux, u.uy, &cc)) return(0);
 
 	if((cc.x == u.ux) && (cc.y == u.uy)) return(0);

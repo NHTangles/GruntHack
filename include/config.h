@@ -426,7 +426,7 @@ typedef long glyph_t;
 #define USER_DUNGEONCOLOR
 
 /* from SporkHack, via NAO */
-#define WHEREIS_FILE	/* write out player's current location to player.whereis */
+#define WHEREIS_FILE "%n.whereis"	/* write out player's current location to player.whereis */
 
 /* from NAO */
 #define LIVELOG		/* live logging of player actions */

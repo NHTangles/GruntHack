@@ -2399,8 +2399,7 @@ nextclass:
             if (want_disp)
 #endif
 	    add_menu(win, obj_to_glyph(otmp),
-		     &any, ilet, 0,
-                     iflags.use_menu_glyphs ? ATR_OBJREF : ATR_NONE,
+		     &any, ilet, 0, ATR_NONE,
                      doname(otmp), MENU_UNSELECTED);
 #ifdef DUMP_LOG
 	    if (want_dump) {
@@ -2447,9 +2446,7 @@ nextclass:
 			    if (want_disp)
 #endif
 			    add_menu(win, obj_to_glyph(otmp),
-					&any, ilet, 0,
-                                        iflags.use_menu_glyphs ?
-							    ATR_OBJREF : ATR_NONE,
+					&any, ilet, 0, ATR_NONE,
                                         doname(otmp), MENU_UNSELECTED);
 #ifdef DUMP_LOG
 			    if (want_dump) {

@@ -118,18 +118,23 @@ flip_level(int flp)
     struct engr *etmp;
     struct mkroom *sroom;
 
-    /* stairs and ladders */
+    /*
+     * stairs and ladders
+     *
+     * DO NOT flip stairs or ladders in the sentinel position (x = 0),
+     * otherwise players will spawn in level corners surrounded by rock.
+     */
     if (flp & 1) {
-	yupstair = y2 - yupstair;
-	ydnstair = y2 - ydnstair;
-	yupladder = y2 - yupladder;
-	ydnladder = y2 - ydnladder;
+	if (xupstair) yupstair = y2 - yupstair;
+	if (xdnstair) ydnstair = y2 - ydnstair;
+	if (xupladder) yupladder = y2 - yupladder;
+	if (xdnladder) ydnladder = y2 - ydnladder;
     }
     if (flp & 2) {
-	xupstair = x2 - xupstair;
-	xdnstair = x2 - xdnstair;
-	xupladder = x2 - xupladder;
-	xdnladder = x2 - xdnladder;
+	if (xupstair) xupstair = x2 - xupstair;
+	if (xdnstair) xdnstair = x2 - xdnstair;
+	if (xupladder) xupladder = x2 - xupladder;
+	if (xdnladder) xdnladder = x2 - xdnladder;
     }
 
     /* traps */
@@ -389,6 +394,9 @@ flip_level_rnd(int flp)
     /* Workaround for preventing the stairs to Vlad's tower appearing
      * in the wizard's tower because of a bug in level flipping. */
     if (On_W_tower_level(&u.uz)) { flp &= 1; }
+    /* vertically flipping the castle is pointless but sligtly changes
+     * y-offset which can trap player in rock */
+    if (Is_stronghold(&u.uz)) { flp &= 2; }
 
     if ((flp & 1) && rn2(2)) c |= 1;
     if ((flp & 2) && rn2(2)) c |= 2;

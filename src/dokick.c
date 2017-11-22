@@ -142,6 +142,7 @@ register xchar x, y;
 	    schar tmp = find_roll_to_hit(mon);
 
 	    for (i = 0; i < NATTK; i++) {
+		int dieroll;
 		/* first of two kicks might have provoked counterattack
 		   that has incapacitated the hero (ie, floating eye) */
 		if (multi < 0) break;
@@ -156,9 +157,9 @@ register xchar x, y;
 		       and shades have no passive counterattack */
 		    Your("%s %s.", kick_passes_thru, mon_nam(mon));
 		    break;	/* skip any additional kicks */
-		} else if (tmp > rnd(20)) {
+		} else if (tmp > (dieroll = rnd(20))) {
 		    You("kick %s.", mon_nam(mon));
-		    sum = damageum(mon, uattk);
+		    sum = damageum(mon, uattk, dieroll);
 		    (void)passive(mon, (boolean)(sum > 0), (sum != 2), AT_KICK);
 		    if (sum == 2)
 			break;		/* Defender died */

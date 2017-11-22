@@ -979,7 +979,7 @@ int damage;
     cloud->expire_f = EXPIRE_GAS_CLOUD;
     cloud->arg = (genericptr_t) damage;
     cloud->visible = TRUE;
-    cloud->glyph = cmap_to_glyph(S_cloud);
+    cloud->glyph = cmap_to_glyph(damage ? S_poisoncloud : S_cloud);
     add_region(cloud);
     return cloud;
 }

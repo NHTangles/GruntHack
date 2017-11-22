@@ -622,7 +622,7 @@ curses_convert_attr(int attr)
 {
     int curses_attr;
 
-    switch (attr & ~ATR_OBJREF) {
+    switch (attr) {
     case ATR_NONE:
         curses_attr = A_NORMAL;
         break;
@@ -641,8 +641,7 @@ curses_convert_attr(int attr)
     default:
         curses_attr = A_NORMAL;
     }
-    /* lower 8 bits not used in curses attrs */ 
-    return curses_attr | ((attr & ATR_OBJREF) ? 1 : 0); 
+    return curses_attr; 
 }
 
 

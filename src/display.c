@@ -194,6 +194,7 @@ magic_map_background(x, y, show)
     if (level.flags.hero_memory)
 	lev->glyph = glyph;
     if (show) show_glyph(x,y, glyph);
+    lev->styp = lev->typ;
 }
 
 /*
@@ -684,8 +685,8 @@ newsym(x,y)
 	    (u.xray_range <= 0 ||
 	     dist2(u.ux,u.uy,x,y) > u.xray_range*u.xray_range) &&
 	    (ACCESSIBLE(lev->typ) ||
-	     lev->typ == POOL || lev->typ == MOAT || lev->typ == WATER ||
-	     lev->typ == LAVAPOOL)) {
+	     (reg->glyph == cmap_to_glyph(S_poisoncloud) && (lev->typ == LAVAPOOL ||
+	     lev->typ == POOL || lev->typ == MOAT || lev->typ == WATER)))) {
 	    show_region(reg,x,y);
 	    return;
 	}
@@ -1358,6 +1359,7 @@ row_refresh(start,stop,y)
     for (x = start; x <= stop; x++)
 	if (gbuf[y][x].glyph != cmap_to_glyph(S_stone))
 	    print_glyph(WIN_MAP,x,y,gbuf[y][x].glyph);
+    display_nhwindow(WIN_MAP,FALSE);
 }
 
 void
@@ -1584,6 +1586,7 @@ back_to_glyph(x,y)
 	case ICE:		idx = S_ice;      break;
 	case AIR:		idx = S_air;	  break;
 	case CLOUD:		idx = S_cloud;	  break;
+	case POISONCLOUD:	idx = S_poisoncloud; break;
 	case WATER:		idx = S_water;	  break;
 	case DBWALL:
 	    idx = (ptr->horizontal) ? S_hcdbridge : S_vcdbridge;
@@ -1697,7 +1700,7 @@ static const char *type_names[MAX_TYPE] = {
 	"DOOR",		"CORR",		"ROOM",		"STAIRS",
 	"LADDER",	"FOUNTAIN",	"THRONE",	"SINK",
 	"ALTAR",	"ICE",		"DRAWBRIDGE_DOWN","AIR",
-	"CLOUD"
+	"CLOUD",	"POISONCLOUD"
 };
 
 

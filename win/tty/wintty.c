@@ -196,6 +196,9 @@ static const char default_menu_cmds[] = {
 	0	/* null terminator */
 };
 
+static char * FDECL(s_atr2str, (int));
+static char * FDECL(e_atr2str, (int));
+
 
 /* clean up and quit */
 STATIC_OVL void
@@ -1248,6 +1251,7 @@ struct WinDesc *cw;
 			curr != page_end;
 			page_lines++, curr = curr->next) {
 #ifdef MENU_COLOR
+		    /*int color = CLR_GRAY, attr = ATR_NONE;*/
 		    int color = NO_COLOR, attr = ATR_NONE;
 		    boolean menucolr = FALSE;
 #endif
@@ -1268,30 +1272,29 @@ struct WinDesc *cw;
 		     */
 			/* add selector for display */
 		    if (curr->selector) {
-                        putchar(curr->selector);
-                        putchar(' ');
-                        if (curr->identifier.a_void != 0 &&
-                                            curr->selected) {
-                            if (curr->count == -1L)
-                                (void) putchar('+'); /* all selected */
-                            else
-                                (void) putchar('#'); /* count selected */
-			} else
-                            putchar('-');
-                        putchar(' ');
-			ttyDisplay->curx += 4;
+			/* because WIN32CON this must be done in
+			 * a brain-dead way */
+			putchar(curr->selector); ttyDisplay->curx++;
+			putchar(' '); ttyDisplay->curx++;
+			/* set item state */
+			if (curr->identifier.a_void != 0 && curr->selected) {
+			    if (curr->count == -1L)
+				(void) putchar('+'); /* all selected */
+			    else
+				(void) putchar('#'); /* count selected */
+			} else {
+			    putchar('-');
+			}
+			ttyDisplay->curx++;
+			putchar(' '); ttyDisplay->curx++;
 		    }
+
 		    if (curr->glyph != NO_GLYPH && iflags.use_menu_glyphs) {
 			    glyph_t character;
 			    unsigned special; /* unused */
 			    /* map glyph to character and color */
-                            if (curr->attr & ATR_OBJREF) {
-			        mapglyph_obj(curr->glyph, &character, &color, &special, u.ux, u.uy, curr->identifier.a_obj);
-                                curr->attr &= ~ATR_OBJREF;
-                            } else {
-			        mapglyph(curr->glyph, &character, &color, &special, u.ux, u.uy);
-                            }
-
+                            /* Note: 'any' MUST be an 'obj' otherwise segfault */
+			    mapglyph_obj(curr->glyph, &character, &color, &special, u.ux, u.uy, curr->identifier.a_obj);
 			    if (color != NO_COLOR) term_start_color(color);
 			    putchar(character);
 			    if (color != NO_COLOR) term_end_color();
@@ -2106,10 +2109,9 @@ tty_add_menu(window, glyph, identifier, ch, gch, attr, str, preselected)
     item->selected = preselected;
     item->selector = ch;
     item->gselector = gch;
-    item->attr = attr & ~ATR_OBJREF;
+    item->attr = attr;
     item->str = copy_of(str);
     item->glyph = glyph;
-    item->obj = attr & ATR_OBJREF ? identifier->a_obj : NULL;
 
     item->next = cw->mlist;
     cw->mlist = item;
@@ -2544,7 +2546,7 @@ tty_print_glyph(window, x, y, glyph)
 	reverse_on = TRUE;
     }
 
-#ifdef TEXTCOLOR
+#if defined(TEXTCOLOR) && !defined(WIN32)
     if (!reverse_on && (special & (MG_STAIRS|MG_OBJPILE))) {
 	if ((special & MG_STAIRS) && iflags.hilite_hidden_stairs)
 	    term_start_bgcolor(CLR_RED);

@@ -46,8 +46,6 @@ typedef struct mi {
 #define ATR_ULINE   4
 #define ATR_BLINK   5
 #define ATR_INVERSE 7
-/* KLUDGE: flag - &any is safe to dereference as an obj for mapglyph() */
-#define ATR_OBJREF  0x8000
 
 /* nh_poskey() modifier types */
 #define CLICK_1     1

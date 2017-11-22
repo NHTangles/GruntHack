@@ -347,12 +347,24 @@ NEARDATA struct permonst mons[] = {
 	SIZ(10, 10, 0, MS_SILENT, MZ_SMALL), MR_ELEC, MR_ELEC,
 	M1_FLY|M1_BREATHLESS|M1_NOLIMBS|M1_NOHEAD|M1_MINDLESS,
 	M2_HOSTILE|M2_NEUTER, M3_INFRAVISIBLE, HI_ZAP),
+    /* 
+     * Buffing up the Beholder significantly as of version 0.2.2. You may think why,
+     * as this creature is already deadly enough as it is. Reason - originally having 
+     * a base level of 6, the Beholder would start appearing as early as dlvl 10, and 
+     * via warning would typically show as 2 or 3 at best. Wildly inaccurate given how 
+     * powerful and dangerous this monster is. Raising its base difficulty to 21 will ensure 
+     * that it does not spawn too early in the dungeon vs mid-level players, and that it will
+     * always show as a 5 via warning, as it should given its abilities. And since it's
+     * getting a buff in the HD department, we'll buff up a couple other areas as well,
+     * as once the hero is blindfolded, defeating a beholder became easier to do than 
+     * engaging in battle with a housecat.
+     */
     MON("beholder", S_EYE,
-	LVL(6, 3, 4, 0, -10), (G_GENO|2),
+	LVL(21, 3, -6, 50, -10), (G_GENO|2),
 	A(ATTK(AT_GAZE, AD_SLOW, 0, 0), ATTK(AT_GAZE, AD_SLEE, 2,25),
 	  ATTK(AT_GAZE, AD_DISN, 0, 0), ATTK(AT_GAZE, AD_STON, 0, 0),
-	  ATTK(AT_GAZE, AD_CNCL, 2, 4), ATTK(AT_BITE, AD_PHYS, 2, 4)),
-	SIZ(10, 10, 0, MS_SILENT, MZ_SMALL), MR_COLD, 0,
+	  ATTK(AT_GAZE, AD_CNCL, 2, 4), ATTK(AT_BITE, AD_PHYS, 6, 8)),
+	SIZ(800, 200, 0, MS_SILENT, MZ_MEDIUM), MR_COLD|MR_ELEC|MR_POISON, MR_POISON,
 	M1_FLY|M1_BREATHLESS|M1_NOLIMBS|M1_NOHEAD|M1_MINDLESS,
 	M2_HOSTILE|M2_NEUTER, M3_INFRAVISIBLE|M3_NOPOLY, CLR_BROWN),
 /*

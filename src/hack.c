@@ -17,6 +17,9 @@ STATIC_DCL boolean FDECL(monstinroom, (struct permonst *,int));
 
 STATIC_DCL void FDECL(move_update, (BOOLEAN_P));
 
+static boolean door_opened;	/* set to true if door was opened during test_move */
+
+
 #define IS_SHOP(x)	(rooms[x].rtype >= SHOPBASE)
 
 #ifdef OVL2
@@ -628,7 +631,7 @@ int mode;
 #ifdef AUTO_OPEN
 		    else if (iflags.autoopen
 				&& !Confusion && !Stunned && !FUMBLED) {
-			    flags.move = doopen_indir(x, y);
+			    door_opened = flags.move = doopen_indir(x, y);
 		    }
 #endif
 		    else if (x == ux || y == uy) {
@@ -1465,9 +1468,13 @@ domove()
 	}
 
 	if (!test_move(u.ux, u.uy, x-u.ux, y-u.uy, DO_MOVE)) {
-	    flags.move = 0;
-	    nomul(0);
-	    return;
+		if (!door_opened) {
+			flags.move = 0;
+			nomul(0);
+		} else {
+			door_opened = 0;
+		}
+		return;
 	}
 
 	/* Move ball and chain.  */

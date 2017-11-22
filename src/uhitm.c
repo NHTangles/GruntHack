@@ -4,10 +4,10 @@
 
 #include "hack.h"
 
-STATIC_DCL boolean FDECL(known_hitum, (struct monst *,struct obj *,int *,struct attack *));
+STATIC_DCL boolean FDECL(known_hitum, (struct monst *,struct obj *,int *,struct attack *,int));
 STATIC_DCL void FDECL(steal_it, (struct monst *, struct attack *));
 STATIC_DCL boolean FDECL(hitum, (struct monst *,int,struct attack *));
-STATIC_DCL boolean FDECL(hmon_hitmon, (struct monst *,struct obj *,int));
+STATIC_DCL boolean FDECL(hmon_hitmon, (struct monst *,struct obj *,int,int));
 #ifdef STEED
 STATIC_DCL int FDECL(joust, (struct monst *,struct obj *));
 #endif
@@ -22,8 +22,7 @@ STATIC_DCL void FDECL(nohandglow, (struct monst *));
 STATIC_DCL boolean FDECL(shade_aware, (struct obj *));
 
 extern boolean notonhead;	/* for long worms */
-/* The below might become a parameter instead if we use it a lot */
-static int dieroll;
+
 /* Used to flag attacks caused by Stormbringer's maliciousness. */
 static boolean override_confirmation = FALSE;
 
@@ -441,11 +440,12 @@ atk_done:
 }
 
 STATIC_OVL boolean
-known_hitum(mon, wep, mhit, uattk) /* returns TRUE if monster still lives */
+known_hitum(mon, wep, mhit, uattk,dieroll) /* returns TRUE if monster still lives */
 register struct monst *mon;
 register struct obj *wep;
 register int *mhit;
 struct attack *uattk;
+int dieroll;
 {
 	register boolean malive = TRUE;
 
@@ -470,11 +470,11 @@ struct attack *uattk;
 	    /* we hit the monster; be careful: it might die or
 	       be knocked into a different location */
 	    notonhead = (mon->mx != x || mon->my != y);
-	    malive = hmon(mon, wep, 0);
+	    malive = hmon(mon, wep, 0, dieroll);
 	    /* this assumes that Stormbringer was uwep not uswapwep */ 
 	    /* if (malive && u.twoweap && !override_confirmation &&
 		    m_at(x, y) == mon)
-		malive = hmon(mon, uswapwep, 0); */
+		malive = hmon(mon, uswapwep, 0, dieroll); */
 	    if (malive) {
 		/* monster still alive */
 		if(!rn2(25) && mon->mhp < mon->mhpmax/2
@@ -510,12 +510,13 @@ int tmp;
 struct attack *uattk;
 {
 	boolean malive;
-	int mhit = (tmp > (dieroll = rnd(20)) || u.uswallow);
+        int dieroll = rnd(20);
+	int mhit = (tmp > dieroll || u.uswallow);
 	int x = u.ux + u.dx, y = u.uy + u.dy;
 
 	if(tmp > dieroll) exercise(A_DEX, TRUE);
 	orig_uwep = uwep;
-	malive = known_hitum(mon, uwep, &mhit, uattk);
+	malive = known_hitum(mon, uwep, &mhit, uattk, dieroll);
 	(void) passive(mon, mhit, malive, AT_WEAP);
 	if (malive && u.twoweap && !override_confirmation && multi >= 0 &&
 	    m_at(x, y) == mon)
@@ -528,17 +529,18 @@ struct attack *uattk;
 		}
 		mhit = (tmp > (/*dieroll = */rnd(20)) || u.uswallow);
 		orig_uwep = uswapwep;
-		malive = known_hitum(mon, uswapwep, &mhit, uattk);
+		malive = known_hitum(mon, uswapwep, &mhit, uattk, dieroll);
 		(void) passive(mon, mhit, malive, AT_WEAP);
 	}
 	return(malive);
 }
 
 boolean			/* general "damage monster" routine */
-hmon(mon, obj, thrown)		/* return TRUE if mon still alive */
+hmon(mon, obj, thrown, dieroll)		/* return TRUE if mon still alive */
 struct monst *mon;
 struct obj *obj;
 int thrown;
+int dieroll;
 {
 	boolean result, anger_guards;
 
@@ -546,7 +548,7 @@ int thrown;
 			    (mon->ispriest || mon->isshk ||
 			     mon->data == &mons[PM_WATCHMAN] ||
 			     mon->data == &mons[PM_WATCH_CAPTAIN]));
-	result = hmon_hitmon(mon, obj, thrown);
+	result = hmon_hitmon(mon, obj, thrown, dieroll);
 	if (mon->ispriest && !rn2(2)) ghod_hitsu(mon);
 	if (anger_guards) (void)angry_guards(!flags.soundok);
 	return result;
@@ -554,10 +556,11 @@ int thrown;
 
 /* guts of hmon() */
 STATIC_OVL boolean
-hmon_hitmon(mon, obj, thrown)
+hmon_hitmon(mon, obj, thrown, dieroll)
 struct monst *mon;
 struct obj *obj;
 int thrown;
+int dieroll;
 {
 	int tmp;
 	struct permonst *mdat = mon->data;
@@ -1425,9 +1428,10 @@ struct attack *mattk;
 extern const char * const behead_msg[];
 
 int
-damageum(mdef, mattk)
+damageum(mdef, mattk, dieroll)
 register struct monst *mdef;
 register struct attack *mattk;
+int dieroll;
 {
 	register struct permonst *pd = mdef->data;
 	register int	tmp = d((int)mattk->damn, (int)mattk->damd);
@@ -2250,6 +2254,7 @@ register int tmp;
 	int	i, sum[NATTK], hittmp = 0;
 	int	nsum = 0;
 	int	dhit = 0;
+	int	dieroll;
 
 	for(i = 0; i < NATTK; i++) {
 	    wep = uwep;
@@ -2276,7 +2281,7 @@ use_weapon:
 			/* KMH -- Don't accumulate to-hit bonuses */
 			if (wep) tmp -= hittmp;
 			/* Enemy dead, before any special abilities used */
-			if (!known_hitum(mon,wep,&dhit,mattk)) {
+			if (!known_hitum(mon,wep,&dhit,mattk,dieroll)) {
 			    sum[i] |= 2;
 			    break;
 			} else sum[i] |= dhit;
@@ -2287,7 +2292,7 @@ use_weapon:
 			 */
 			if (dhit && mattk->adtyp != AD_SPEL
 				&& mattk->adtyp != AD_PHYS)
-				sum[i] |= damageum(mon,mattk);
+				sum[i] |= damageum(mon,mattk,dieroll);
 
 			if (wep == uwep && u.twoweap && uswapwep) {
 			    wep = uswapwep;
@@ -2310,7 +2315,7 @@ use_weapon:
 		case AT_BUTT:
 		case AT_TENT:
 			if (i==0 && uwep && (youmonst.data->mlet==S_LICH)) goto use_weapon;
-			if ((dhit = (tmp > rnd(20) || u.uswallow)) != 0) {
+			if ((dhit = (tmp > (dieroll = rnd(20)) || u.uswallow)) != 0) {
 			    int compat;
 
 			    if (!u.uswallow &&
@@ -2321,7 +2326,7 @@ use_weapon:
 				    mon_nam(mon),
 				    compat == 2 ? "engagingly":"seductively");
 				/* doesn't anger it; no wakeup() */
-				sum[i] = damageum(mon, mattk);
+				sum[i] = damageum(mon, mattk, dieroll);
 				break;
 			    }
 			    wakeup(mon, TRUE);
@@ -2346,7 +2351,7 @@ use_weapon:
 			    else if (mattk->aatyp == AT_TENT)
 				    Your("tentacles suck %s.", mon_nam(mon));
 			    else You("hit %s.", mon_nam(mon));
-			    sum[i] = damageum(mon, mattk);
+			    sum[i] = damageum(mon, mattk, dieroll);
 			} else
 			    missum(mon, mattk);
 			break;
@@ -2361,15 +2366,16 @@ use_weapon:
 			    Your("hug passes harmlessly through %s.",
 				mon_nam(mon));
 			else if (!sticks(mon->data) && !u.uswallow) {
+                            dieroll = rnd(20);
 			    if (mon==u.ustuck) {
 				pline("%s is being %s.", Monnam(mon),
 				    u.umonnum==PM_ROPE_GOLEM ? "choked":
 				    "crushed");
-				sum[i] = damageum(mon, mattk);
+				sum[i] = damageum(mon, mattk, dieroll);
 			    } else if(i >= 2 && sum[i-1] && sum[i-2]) {
 				You("grab %s!", mon_nam(mon));
 				u.ustuck = mon;
-				sum[i] = damageum(mon, mattk);
+				sum[i] = damageum(mon, mattk, dieroll);
 			    }
 			}
 			break;

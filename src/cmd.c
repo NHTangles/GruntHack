@@ -113,6 +113,7 @@ STATIC_PTR int NDECL(doprev_message);
 STATIC_PTR int NDECL(timed_occupation);
 STATIC_PTR int NDECL(doextcmd);
 STATIC_PTR int NDECL(domonability);
+STATIC_PTR int NDECL(dooverview_or_wiz_where);
 STATIC_PTR int NDECL(dotravel);
 # ifdef WIZARD
 STATIC_PTR int NDECL(wiz_wish);
@@ -585,6 +586,17 @@ enter_explore_mode(VOID_ARGS)
 		}
 	}
 #endif /*DGAMELAUNCH*/
+	return 0;
+}
+
+STATIC_PTR int
+dooverview_or_wiz_where()
+{
+#ifdef WIZARD
+	if (wizard) return wiz_where();
+	else
+#endif
+	dooverview();
 	return 0;
 }
 
@@ -1985,6 +1997,7 @@ struct ext_func_tab extcmdlist[] = {
 	{"explore_mode", "enter explore (discovery) mode (only if defined)", enter_explore_mode, IFBURIED},
 
 	{"adjust", "adjust inventory letters", doorganize, IFBURIED, AUTOCOMPLETE},
+        {"annotate", "name current level", donamelevel, IFBURIED, AUTOCOMPLETE},
 	{"chat", "talk to someone", dotalk, IFBURIED, AUTOCOMPLETE},	/* converse? */
 	{"conduct", "list status of voluntary challenges", doconduct, IFBURIED, AUTOCOMPLETE},
 	{"dip", "dip an object into something", dodip, !IFBURIED, AUTOCOMPLETE},
@@ -1996,6 +2009,7 @@ struct ext_func_tab extcmdlist[] = {
 	{"monster", "use a monster's special ability", domonability, IFBURIED, AUTOCOMPLETE},
 	{"name", "name an item or type of object", ddocall, IFBURIED, AUTOCOMPLETE},
 	{"offer", "offer a sacrifice to the gods", dosacrifice, !IFBURIED, AUTOCOMPLETE},
+        {"overview", "show an overview of the dungeon", dooverview, IFBURIED,AUTOCOMPLETE},
 	{"pray", "pray to the gods for help", dopray, IFBURIED, AUTOCOMPLETE},
 	{"quit", "exit without saving current game", done2, IFBURIED, AUTOCOMPLETE},
 #ifdef STEED
@@ -2013,6 +2027,7 @@ struct ext_func_tab extcmdlist[] = {
 	{"versionext", "list compile time options for this version of NetHack",
 		doextversion, IFBURIED, AUTOCOMPLETE},
 	{"wipe", "wipe off your face", dowipe, !IFBURIED, AUTOCOMPLETE},
+	{"where", "tell locations of special levels", dooverview_or_wiz_where, IFBURIED},
 	{"?", "get this list of extended commands", doextlist, IFBURIED, AUTOCOMPLETE},
 #if defined(WIZARD)
  	/*
@@ -2046,7 +2061,6 @@ struct ext_func_tab extcmdlist[] = {
 	{(char *)0, (char *)0, donull, IFBURIED}, /* identify */
 	{(char *)0, (char *)0, donull, IFBURIED}, /* levelport */
 	{(char *)0, (char *)0, donull, IFBURIED}, /* wish */
-	{(char *)0, (char *)0, donull, IFBURIED}, /* where */
 #endif /* WIZARD */
 	{(char *)0, (char *)0, donull, IFBURIED}
 };
@@ -2080,7 +2094,6 @@ static struct ext_func_tab debug_extcmdlist[] = {
 	{"identify", "identify items in pack", wiz_identify, IFBURIED},
 	{"levelport", "to trans-level teleport", wiz_level_tele, IFBURIED},
 	{"wish", "make wish", wiz_wish, IFBURIED},
-	{"where", "tell locations of special levels", wiz_where, IFBURIED},
 	{(char *)0, (char *)0, donull, IFBURIED}
 };
 #endif /* WIZARD */
@@ -2118,11 +2131,11 @@ init_bind_list(void)
 		bind_key(C('f'), "map" );
 		bind_key(C('g'), "genesis" );
 		bind_key(C('i'), "identify" );
-		bind_key(C('o'), "where" );
 		bind_key(C('v'), "levelport" );
 		bind_key(C('w'), "wish" );
 	}
 #endif
+	bind_key(C('o'), "where" ); /* overview or wiz_where */
 	bind_key(C('l'), "redraw" ); /* if number_pad is set */
 	bind_key(C('p'), "previous" );
 	bind_key(C('r'), "redraw" );

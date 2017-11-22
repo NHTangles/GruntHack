@@ -167,7 +167,8 @@ const char *verb;
 		    if (mtmp) {
 			if (!passes_walls(mtmp->data) && 
 			    !throws_rocks(mtmp->data)) {
-			    if (hmon(mtmp, obj, TRUE) && !is_whirly(mtmp->data))
+                            int dieroll = rnd(20);
+			    if (hmon(mtmp, obj, TRUE, dieroll) && !is_whirly(mtmp->data))
 				/*return FALSE;*/	/* still alive */
 				;
 			    if (!DEADMONSTER(mtmp)) {
@@ -294,7 +295,7 @@ doaltarobj(obj)  /* obj is an object dropped on an altar */
 	/* KMH, conduct */
 	if(!u.uconduct.gnostic++)
 	#ifdef LIVELOG
-  	        livelog_conduct("eschewed atheism, by dropping %s on an altar")
+  	        livelog_conduct("eschewed atheism, by dropping %s on an altar", doname(obj))
 	#endif
                 ;
 
@@ -1157,6 +1158,7 @@ boolean at_stairs, falling, portal;
 	keepdogs(FALSE);
 	if (u.uswallow)				/* idem */
 		u.uswldtim = u.uswallow = 0;
+	recalc_mapseen(); /* recalculate map overview before we leave the level */
 	/*
 	 *  We no longer see anything on the level.  Make sure that this
 	 *  follows u.uswallow set to null since uswallow overrides all
@@ -1196,6 +1198,11 @@ boolean at_stairs, falling, portal;
 #ifdef USE_TILES
 	substitute_tiles(newlevel);
 #endif
+	/* record this level transition as a potential seen branch unless using
+	 * some non-standard means of transportation (level teleport).
+	 */
+	if ((at_stairs || falling || portal) && (u.uz.dnum != newlevel->dnum))
+		recbranch_mapseen(&u.uz, newlevel);
 	assign_level(&u.uz0, &u.uz);
 	assign_level(&u.uz, newlevel);
 	assign_level(&u.utolev, newlevel);

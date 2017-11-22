@@ -542,6 +542,13 @@ E schar FDECL(lev_by_name, (const char *));
 #ifdef WIZARD
 E schar FDECL(print_dungeon, (BOOLEAN_P,schar *,xchar *));
 #endif
+E int NDECL(donamelevel);
+E int NDECL(dooverview);
+E void FDECL(forget_mapseen, (int));
+E void FDECL(init_mapseen, (d_level *));
+E void NDECL(recalc_mapseen);
+E void FDECL(recbranch_mapseen, (d_level *, d_level *));
+E void FDECL(remdun_mapseen, (int));
 
 /* ### eat.c ### */
 
@@ -2171,8 +2178,8 @@ E boolean FDECL(attack_checks, (struct monst *,struct obj *));
 E void FDECL(check_caitiff, (struct monst *));
 E schar FDECL(find_roll_to_hit, (struct monst *));
 E boolean FDECL(attack, (struct monst *));
-E boolean FDECL(hmon, (struct monst *,struct obj *,int));
-E int FDECL(damageum, (struct monst *,struct attack *));
+E boolean FDECL(hmon, (struct monst *,struct obj *,int,int));
+E int FDECL(damageum, (struct monst *,struct attack *,int));
 E void FDECL(missum, (struct monst *,struct attack *));
 E int FDECL(passive, (struct monst *,BOOLEAN_P,int,UCHAR_P));
 E void FDECL(passive_obj, (struct monst *,struct obj *,struct attack *));
@@ -2516,6 +2523,10 @@ E void FDECL(destroy_item, (int,int));
 E int FDECL(destroy_mitem, (struct monst *,int,int));
 E int FDECL(resist, (struct monst *,CHAR_P,int,int));
 E void NDECL(makewish);
+
+/* ### termcap.c ### */
+E void FDECL(term_start_bgcolor, (int));
+E void NDECL(term_end_bgcolor);
 
 #endif /* !MAKEDEFS_C && !LEV_LEX_C */
 
