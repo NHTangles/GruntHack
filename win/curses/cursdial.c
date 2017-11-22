@@ -107,17 +107,14 @@ curses_line_input_dialog(const char *prompt, char *answer, int buffer)
         }
     }
 
-    if (iflags.window_inited) {
-        bwin = curses_create_window(prompt_width, height, UP);
-        wrefresh(bwin);
-        getbegyx(bwin, winy, winx);
-        askwin = newwin(height, prompt_width, winy + 1, winx + 1);
-    } else {
-        bwin = curses_create_window(prompt_width, height, CENTER);
-        wrefresh(bwin);
-        getbegyx(bwin, winy, winx);
-        askwin = newwin(height, prompt_width, winy + 1, winx + 1);
-    }
+    bwin = curses_create_window(prompt_width, height,
+                                iflags.window_inited ? UP : CENTER);
+    wrefresh(bwin);
+    getbegyx(bwin, winy, winx);
+    werase(bwin);
+    delwin(bwin);
+    askwin = newwin(height, prompt_width, winy + 1, winx + 1);
+
     for (count = 0; count < prompt_height; count++) {
         tmpstr = curses_break_str(prompt, maxwidth, count + 1);
         if (count == (prompt_height - 1)) { /* Last line */
@@ -153,8 +150,6 @@ curses_line_input_dialog(const char *prompt, char *answer, int buffer)
     }
     curs_set(0);
     strcpy(answer, input);
-    werase(bwin);
-    delwin(bwin);
     curses_destroy_win(askwin);
 }
 
