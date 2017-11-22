@@ -238,12 +238,9 @@ curses_character_input_dialog(const char *prompt, const char *choices,
     curses_stupid_hack = 0;
 
     while (1) {
-        if (askwin)
-            answer = wgetch(askwin);
-        else
-            answer = wgetch(curses_get_nhwin(MAP_WIN));
+        int res = timeout_get_wch(-1, &answer);
 
-        if (answer == ERR) {
+        if (res == ERR) {
             answer = def;
             break;
         }
@@ -274,8 +271,7 @@ curses_character_input_dialog(const char *prompt, const char *choices,
             if (accept_count) {
                 if (answer != '0') {
                     yn_number = curses_get_count(answer - '0');
-                    touchwin(askwin);
-                    refresh();
+                    wrefresh(askwin);
                 }
 
                 answer = '#';
@@ -1137,8 +1133,7 @@ menu_get_selections(WINDOW * win, nhmenu *menu, int how)
         default:
             if (isdigit(curletter)) {
                 count = curses_get_count(curletter - '0');
-                touchwin(win);
-                refresh();
+                wrefresh(win);
                 curletter = wgetch(win);
                 if (count > 0) {
                     count_letter = curletter;
@@ -1192,8 +1187,6 @@ menu_get_selections(WINDOW * win, nhmenu *menu, int how)
         case MENU_SEARCH:
             curses_line_input_dialog("Search for:", search_key, BUFSZ);
 
-            refresh();
-            touchwin(win);
             wrefresh(win);
 
             if (strlen(search_key) == 0) {

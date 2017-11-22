@@ -38,8 +38,10 @@ int
 curses_read_char()
 {
     int ch, tmpch;
+    do {
+        timeout_get_wch(-1, &ch);
+    } while (!ch);
 
-    ch = wgetch(curses_get_nhwin(MAP_WIN));
     tmpch = ch;
     ch = curses_convert_keys(ch);
 
