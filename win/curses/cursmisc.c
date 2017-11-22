@@ -664,13 +664,9 @@ struct strtoattr {
 };
 
 static const struct strtoattr str_attrs[] = {
-    {"blink", A_BLINK, FALSE},
     {"bold", A_BOLD, FALSE},
     {"inverse", A_REVERSE, FALSE},
     {"reverse", A_REVERSE, FALSE},
-#ifdef A_ITALIC
-    {"italic", A_ITALIC, FALSE},
-#endif
     {"underline", A_UNDERLINE, FALSE},
 /*  {"black", COLOR_BLACK, TRUE}, pointless */
     {"red", COLOR_RED, TRUE},
