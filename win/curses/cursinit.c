@@ -378,56 +378,32 @@ curses_init_nhcolors()
     if (has_colors()) {
         assume_default_colors(COLOR_WHITE, COLOR_BLACK);
         init_pair(500, COLOR_BLACK, COLOR_BLACK);
-        init_pair(1, COLOR_BLACK, COLOR_BLACK);
-        init_pair(2, COLOR_RED, COLOR_BLACK);
-        init_pair(3, COLOR_GREEN, COLOR_BLACK);
-        init_pair(4, COLOR_YELLOW, COLOR_BLACK);
-        init_pair(5, COLOR_BLUE, COLOR_BLACK);
-        init_pair(6, COLOR_MAGENTA, COLOR_BLACK);
-        init_pair(7, COLOR_CYAN, COLOR_BLACK);
-        init_pair(8, COLOR_WHITE, COLOR_BLACK);
+        int fgcolor = 0;
+        int bgcolor = 0;
 
-        {
-            int i;
+        int colors = 8;
+        if (COLORS >= 16)
+            colors = 16;
 
-            int clr_remap[16] = {
-                COLOR_BLACK, COLOR_RED, COLOR_GREEN, COLOR_YELLOW,
-                COLOR_BLUE,
-                COLOR_MAGENTA, COLOR_CYAN, -1, COLOR_WHITE,
-                COLOR_RED + 8, COLOR_GREEN + 8, COLOR_YELLOW + 8,
-                COLOR_BLUE + 8,
-                COLOR_MAGENTA + 8, COLOR_CYAN + 8, COLOR_WHITE + 8
-            };
-
-            for (i = 0; i < (COLORS >= 16 ? 16 : 8); i++) {
-                init_pair(17 + (i * 2) + 0, clr_remap[i], COLOR_RED);
-                init_pair(17 + (i * 2) + 1, clr_remap[i], COLOR_BLUE);
+        int i;
+        for (i = 0; i < colors * 8; i++) {
+            fgcolor = (i % colors);
+            bgcolor = (i / colors);
+            /* Convert black foreground to darkgray/blue. */
+            if (fgcolor == COLOR_BLACK) {
+#ifdef USE_DARKGRAY
+                if (iflags.wc2_darkgray)
+                    fgcolor = COLOR_BLACK + 8;
+                else
+#endif
+                    fgcolor = COLOR_BLUE;
             }
 
-            boolean hicolor = FALSE;
-            if (COLORS >= 16)
-                hicolor = TRUE;
-
-            /* Work around the crazy definitions above for more background colors... */
-            for (i = 0; i < (COLORS >= 16 ? 16 : 8); i++) {
-                init_pair((hicolor ? 49 : 9) + i, clr_remap[i], COLOR_GREEN);
-                init_pair((hicolor ? 65 : 33) + i, clr_remap[i], COLOR_YELLOW);
-                init_pair((hicolor ? 81 : 41) + i, clr_remap[i], COLOR_MAGENTA);
-                init_pair((hicolor ? 97 : 49) + i, clr_remap[i], COLOR_CYAN);
-                init_pair((hicolor ? 113 : 57) + i, clr_remap[i], COLOR_WHITE);
-            }
-        }
-
-
-        if (COLORS >= 16) {
-            init_pair(9, COLOR_WHITE, COLOR_BLACK);
-            init_pair(10, COLOR_RED + 8, COLOR_BLACK);
-            init_pair(11, COLOR_GREEN + 8, COLOR_BLACK);
-            init_pair(12, COLOR_YELLOW + 8, COLOR_BLACK);
-            init_pair(13, COLOR_BLUE + 8, COLOR_BLACK);
-            init_pair(14, COLOR_MAGENTA + 8, COLOR_BLACK);
-            init_pair(15, COLOR_CYAN + 8, COLOR_BLACK);
-            init_pair(16, COLOR_WHITE + 8, COLOR_BLACK);
+            /* If the foreground and background is the same,
+               use black for foreground. */
+            if (fgcolor == bgcolor)
+                fgcolor = COLOR_BLACK;
+            init_pair(i + 1, fgcolor, bgcolor);
         }
 
         if (can_change_color()) {
@@ -470,8 +446,6 @@ curses_init_nhcolors()
                     color_content(CURSES_DARK_GRAY, &orig_darkgray.r,
                                   &orig_darkgray.g, &orig_darkgray.b);
                     init_color(CURSES_DARK_GRAY, 300, 300, 300);
-                    /* just override black colorpair entry here */
-                    init_pair(1, CURSES_DARK_GRAY, COLOR_BLACK);
                 }
 # endif
             } else {

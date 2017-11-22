@@ -568,11 +568,14 @@ curses_print_glyph(winid wid, XCHAR_P x, XCHAR_P y, int glyph)
     }
 
     if (wid == NHW_MAP) {
-        if ((special & MG_STAIRS) && iflags.hilite_hidden_stairs) {
-            color = 16 + (color * 2);
-        } else if ((special & MG_OBJPILE) && iflags.hilite_obj_piles) {
-            color = 16 + (color * 2) + 1;
-        }
+        int colors = 8;
+        if (COLORS >= 16)
+            colors = 16;
+
+        if ((special & MG_STAIRS) && iflags.hilite_hidden_stairs)
+            color += COLOR_RED * colors;
+        else if ((special & MG_OBJPILE) && iflags.hilite_obj_piles)
+            color += COLOR_BLUE * colors;
     }
 
     curses_putch(wid, x, y, ch, color, attr);
