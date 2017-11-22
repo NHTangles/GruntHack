@@ -99,12 +99,13 @@ OPTIONS=windowborders:3
 OPTIONS=splash_screen
 #
 # This controls what text attributes are used to highlight any pets.
-# Any combination of single letters representing each text attribute
-# may be used.  Not all attributes work on all terminals.
+# They can be combined with &, e.g. bold&underline.
+# Not all attributes work on all terminals.
 #
-# Attributes may be one or more of: Bold, Inverse, Underline, blinK,
-# iTalic, Rightline, or Leftline.  The default is underline.
-OPTIONS=petattr:u
+# Attributes may be one or more of: bold, inverse, underline.
+# You may also specify *one* color, which will be used as background
+# color.  The default is underline.
+OPTIONS=petattr:underline
 #
 # Controls whether color and attributes are used for menu headers,
 # window borders, message text, etc.  This is separate from the color
