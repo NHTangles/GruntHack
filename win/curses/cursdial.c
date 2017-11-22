@@ -75,60 +75,83 @@ static nhmenu *nhmenus = NULL;  /* NetHack menu array */
 void
 curses_line_input_dialog(const char *prompt, char *answer, int buffer)
 {
-    int map_height, map_width, maxwidth, remaining_buf, winx, winy, count;
+    int map_height, map_width, remaining_buf, winx, winy, count;
     WINDOW *askwin, *bwin;
     char input[buffer];
     char *tmpstr;
-    int prompt_width = strlen(prompt) + buffer + 1;
+    int prompt_width = strlen(prompt);
     int prompt_height = 1;
     int height = prompt_height;
-
-    maxwidth = term_cols - 2;
+    int width = term_cols - 2;
 
     if (iflags.window_inited) {
         if (!iflags.wc_popup_dialog)
             return curses_message_win_getline(prompt, answer, buffer);
         curses_get_window_size(MAP_WIN, &map_height, &map_width);
-        if ((prompt_width + 2) > map_width)
-            maxwidth = map_width - 2;
+        width = map_width - 2;
     }
 
-    if (prompt_width > maxwidth) {
-        prompt_height = curses_num_lines(prompt, maxwidth);
-        height = prompt_height;
-        prompt_width = maxwidth;
-        tmpstr = curses_break_str(prompt, maxwidth, prompt_height);
-        remaining_buf = buffer - (strlen(tmpstr) - 1);
-        if (remaining_buf > 0) {
-            height += (remaining_buf / prompt_width);
-            if ((remaining_buf % prompt_width) > 0) {
-                height++;
-            }
-        }
-    }
+    /* Figure out if we need several lines for the prompt itself. */
+    if (prompt_width + 2 > width)
+        prompt_height = curses_num_lines(prompt, width);
 
-    bwin = curses_create_window(prompt_width, height,
+    height = prompt_height;
+    height++; /* Fit the input line. */
+
+    bwin = curses_create_window(width, height,
                                 iflags.window_inited ? UP : CENTER);
     wrefresh(bwin);
     getbegyx(bwin, winy, winx);
     werase(bwin);
     delwin(bwin);
-    askwin = newwin(height, prompt_width, winy + 1, winx + 1);
+    askwin = newwin(height, width, winy + 1, winx + 1);
 
-    for (count = 0; count < prompt_height; count++) {
-        tmpstr = curses_break_str(prompt, maxwidth, count + 1);
-        if (count == (prompt_height - 1)) { /* Last line */
-            mvwprintw(askwin, count, 0, "%s ", tmpstr);
-        } else {
-            mvwaddstr(askwin, count, 0, tmpstr);
+    if (prompt_width + 2 > width) {
+        for (count = 0; count < prompt_height; count++) {
+            tmpstr = curses_break_str(prompt, width, count + 1);
+            mvwaddstr(askwin, count, 1, tmpstr);
+            free(tmpstr);
         }
-        free(tmpstr);
-    }
+    } else
+        mvwaddstr(askwin, 0, 1, prompt);
+
+    /* Cursor positioning for the prompt */
+    int x = 1;
+    int y = prompt_height;
+
+    int i; /* Used to print characters on the input line. */
 
     curs_set(1);
     int answer_ch;
     int buffer_cnt = 0;
     while (1) {
+        /* First, print out what we have at the moment on the input line. */
+        x = 1;
+        wmove(askwin, y, x);
+        wattron(askwin, A_UNDERLINE);
+        i = 0;
+        /* Maybe the input wont fit. In that case, skip characters until it
+           does. +2 because we also want to be able to fit the cursor for
+           further input in the end, too. */
+        if (i < (buffer_cnt - width + 2))
+            i = (buffer_cnt - width + 2);
+
+        /* Now do the existing input */
+        for (; i < buffer_cnt; i++) {
+            waddch(askwin, input[i]);
+            x++;
+        }
+
+        /* If we still have room for more, fill the rest of the line with
+           blank space. */
+        for (i = x; i < (width - 1); i++)
+            waddch(askwin, ' ');
+
+        /* Done with outputting current input. Position the cursor and
+           query for the next input. */
+        wattroff(askwin, A_UNDERLINE);
+        wmove(askwin, y, x);
+
         answer_ch = wgetch(askwin);
         if (answer_ch == KEY_ESCAPE) {
             input[0] = '\0';
@@ -146,7 +169,6 @@ curses_line_input_dialog(const char *prompt, char *answer, int buffer)
         buffer_cnt++;
         if (!answer_ch)
             break;
-        waddch(askwin, answer_ch);
     }
     curs_set(0);
     strcpy(answer, input);
