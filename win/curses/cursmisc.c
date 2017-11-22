@@ -43,9 +43,16 @@ curses_read_char()
     tmpch = ch;
     ch = curses_convert_keys(ch);
 
+    /* Handle Alt+key as Meta+key */
+    if (ch & KEY_ALT) {
+        tmpch = (ch - KEY_ALT);
+        ch = M(tmpch);
+    }
+
     if (ch == 0) {
         ch = DOESCAPE;          /* map NUL to ESC since nethack doesn't expect NUL */
     }
+
 #if defined(ALT_0) && defined(ALT_9)    /* PDCurses, maybe others */
     if ((ch >= ALT_0) && (ch <= ALT_9)) {
         tmpch = (ch - ALT_0) + '0';
