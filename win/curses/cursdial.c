@@ -173,6 +173,25 @@ do_getlin(const char *prompt, char *answer, int buffer, boolean extcmd)
             break;
 
         switch (answer_ch) {
+        case KEY_HOME:
+            cursor_pos = 0;
+            x = 0;
+            break;
+        case KEY_END:
+            x += (buffer_cnt - cursor_pos);
+            if (x > (width - 2))
+                x = (width - 2);
+            cursor_pos = buffer_cnt;
+            break;
+        case KEY_DC: /* Delete */
+            if (cursor_pos == buffer_cnt)
+                break;
+
+            /* Delete is equal to right + backspace */
+            cursor_pos++;
+            x++;
+
+            /* fallthrough */
         case KEY_BACKSPACE:
         case 8:
             /* Is this a valid action? cursor_pos==0 means we're
