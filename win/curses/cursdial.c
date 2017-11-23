@@ -119,7 +119,7 @@ curses_line_input_dialog(const char *prompt, char *answer, int buffer)
     int x = 0; /* within input, which is 1 less than true position. */
     int y = prompt_height;
 
-    int i; /* Used to print characters on the input line. */
+    int i;
 
     curs_set(1);
     int answer_ch;
@@ -157,6 +157,21 @@ curses_line_input_dialog(const char *prompt, char *answer, int buffer)
             break;
 
         switch (answer_ch) {
+        case KEY_BACKSPACE:
+        case 8:
+            /* Is this a valid action? cursor_pos==0 means we're
+               at the beginning. */
+            if (!cursor_pos)
+                break;
+
+            /* Remove a character, and potentially shift stuff
+               after it back. */
+            for (i = (cursor_pos - 1); i < buffer_cnt; i++)
+                input[i] = input[i+1];
+
+            buffer_cnt--;
+            input[buffer_cnt] = '\0';
+            /* fallthrough */
         case KEY_LEFT:
             if (cursor_pos) {
                 cursor_pos--;
@@ -165,18 +180,19 @@ curses_line_input_dialog(const char *prompt, char *answer, int buffer)
             }
             break;
         default:
-            /* Character input */
-            if (buffer_cnt != buffer &&
-                answer_ch < 256) {
-                /* Add the character at our input at the position
-                   we are at.  This might shift other characters. */
-                int i = buffer_cnt;
-                for (;i > cursor_pos; i--)
-                    input[i] = input[i-1];
+            /* Character input is valid only for 8bit input,
+               and if our buffer isn't filled. */
+            if (buffer_cnt == buffer ||
+                answer_ch >= 256)
+                break;
 
-                input[cursor_pos] = answer_ch;
-                buffer_cnt++;
-            }
+            /* Add the character at our input at the position
+               we are at.  This might shift other characters. */
+            for (i = buffer_cnt; i > cursor_pos; i--)
+                input[i] = input[i-1];
+
+            input[cursor_pos] = answer_ch;
+            buffer_cnt++;
             /* fallthrough */
         case KEY_RIGHT:
             if (cursor_pos < buffer_cnt) {
