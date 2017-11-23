@@ -109,4 +109,10 @@ curses_add_inv(int y, int glyph, CHAR_P accelerator, attr_t attr,
     wprintw(win, "%s", str);
     wattroff(win, attr);
     wclrtoeol(win);
+    if (y > win->maxy)
+        return;
+
+    y++;
+    wmove(win, y, x);
+    wclrtobot(win);
 }
