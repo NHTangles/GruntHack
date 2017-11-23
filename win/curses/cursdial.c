@@ -230,20 +230,14 @@ do_getlin(const char *prompt, char *answer, int buffer, boolean extcmd)
 
             input[cursor_pos] = answer_ch;
             buffer_cnt++;
-            /* fallthrough */
-        case KEY_RIGHT:
-            if (cursor_pos < buffer_cnt) {
-                cursor_pos++;
-                if (x < (width - 2))
-                    x++;
-            }
 
             /* If we are handling an extended command, maybe try to
                autocomplete it. */
             extcmd_match_total = 0;
             if (extcmd) {
                 for (i = 0; extcmdlist[i].ef_txt; i++) {
-                    if (!strncmpi(input, extcmdlist[i].ef_txt, cursor_pos)) {
+                    if (!strncmpi(input, extcmdlist[i].ef_txt,
+                                  cursor_pos + 1)) {
                         extcmd_match = i;
                         extcmd_match_total++;
                     }
@@ -254,6 +248,13 @@ do_getlin(const char *prompt, char *answer, int buffer, boolean extcmd)
                     strcpy(input, extcmdlist[extcmd_match].ef_txt);
                     buffer_cnt = strlen(input);
                 }
+            }
+            /* fallthrough */
+        case KEY_RIGHT:
+            if (cursor_pos < buffer_cnt) {
+                cursor_pos++;
+                if (x < (width - 2))
+                    x++;
             }
             break;
         }
