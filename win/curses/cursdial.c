@@ -53,6 +53,8 @@ typedef enum menu_op_type {
 extern struct menucoloring *menu_colorings;
 #endif
 
+static void do_getlin(const char *prompt, char *answer, int buffer,
+                      boolean extcmd);
 static nhmenu *get_menu(winid wid);
 static char menu_get_accel(boolean first);
 static void menu_determine_pages(nhmenu *menu);
@@ -75,9 +77,18 @@ static nhmenu *nhmenus = NULL;  /* NetHack menu array */
 void
 curses_line_input_dialog(const char *prompt, char *answer, int buffer)
 {
+    do_getlin(prompt, answer, buffer, FALSE);
+}
+
+/* Performs input handling of a line. If extcmd is TRUE, attempt to autocomplete
+   into extended commands. */
+static void
+do_getlin(const char *prompt, char *answer, int buffer, boolean extcmd)
+{
     int map_height, map_width, remaining_buf, winx, winy, count;
     WINDOW *askwin, *bwin;
     char input[buffer];
+    memset(input, 0, buffer);
     char *tmpstr;
     int prompt_width = strlen(prompt);
     int prompt_height = 1;
@@ -125,6 +136,11 @@ curses_line_input_dialog(const char *prompt, char *answer, int buffer)
     int answer_ch;
     int buffer_cnt = 0; /* Length of current input (excludes NULL) */
     int cursor_pos = 0; /* Cursor position within the input */
+
+    /* Extended command autocompletion: autocomplete if we have a single match
+       only. */
+    int extcmd_match = 0;
+    int extcmd_match_total = 0;
     while (1) {
         /* First, print out what we have at the moment on the input line. */
         wmove(askwin, y, 1);
@@ -135,8 +151,8 @@ curses_line_input_dialog(const char *prompt, char *answer, int buffer)
              (i - cursor_pos + x) < (width - 2); i++) {
             if (i < buffer_cnt)
                 waddch(askwin, input[i]);
-            else
-                waddch(askwin, ' '); /* we're past the end of the string */
+            else /* we're past the end of the string */
+                waddch(askwin, ' ');
         }
 
         /* Done with outputting current input. Position the cursor and
@@ -180,11 +196,12 @@ curses_line_input_dialog(const char *prompt, char *answer, int buffer)
             }
             break;
         default:
-            /* Character input is valid only for 8bit input,
-               and if our buffer isn't filled. -1 since we
-               also need to include the null terminator. */
+            /* Character input is valid only for printable
+               characters and if our buffer isn't filled.
+               -1 since we also need to include the null
+               terminator. */
             if (buffer_cnt == (buffer - 1) ||
-                answer_ch >= 256)
+                answer_ch >= 128 || answer_ch < ' ')
                 break;
 
             /* Add the character at our input at the position
@@ -200,6 +217,24 @@ curses_line_input_dialog(const char *prompt, char *answer, int buffer)
                 cursor_pos++;
                 if (x < (width - 2))
                     x++;
+            }
+
+            /* If we are handling an extended command, maybe try to
+               autocomplete it. */
+            extcmd_match_total = 0;
+            if (extcmd) {
+                for (i = 0; extcmdlist[i].ef_txt; i++) {
+                    if (!strncmpi(input, extcmdlist[i].ef_txt, cursor_pos)) {
+                        extcmd_match = i;
+                        extcmd_match_total++;
+                    }
+                }
+
+                /* Autocomplete if we have a single match */
+                if (extcmd_match_total == 1) {
+                    strcpy(input, extcmdlist[extcmd_match].ef_txt);
+                    buffer_cnt = strlen(input);
+                }
             }
             break;
         }
@@ -376,122 +411,26 @@ curses_character_input_dialog(const char *prompt, const char *choices,
 int
 curses_ext_cmd()
 {
-    int count, letter, prompt_width, startx, starty, winx, winy;
-    int messageh, messagew, maxlen = BUFSZ - 1;
-    int ret = -1;
-    char cur_choice[BUFSZ];
-    int matches = 0;
-    WINDOW *extwin = NULL, *extwin2 = NULL;
-
-    if (iflags.extmenu) {
+    if (iflags.extmenu)
         return extcmd_via_menu();
-    }
-    
-    startx = 0;
-    starty = 0;
-    if (iflags.wc_popup_dialog) { /* Prompt in popup window */
-        int x0, y0, w, h; /* bounding coords of popup */
-        extwin2 = curses_create_window(25, 1, UP);
-        wrefresh(extwin2);
-        /* create window inside window to prevent overwriting of border */
-        getbegyx(extwin2,y0,x0);
-        getmaxyx(extwin2,h,w);
-        extwin = newwin(1, w-2, y0+1, x0+1);
-        if (w - 4 < maxlen) maxlen = w - 4;
-    } else {
-        curses_get_window_xy(MESSAGE_WIN, &winx, &winy);
-        curses_get_window_size(MESSAGE_WIN, &messageh, &messagew);
 
-        if (curses_window_has_border(MESSAGE_WIN)) {
-            winx++;
-            winy++;
-        }
+    /* If we want popup dialogs, just use getlin. */
+    const char *prompt = "extended command: (? for help)";
+    if (!iflags.wc_popup_dialog)
+        prompt = "#"; /* Mimic the tty windowport here */
 
-        winy += messageh - 1;
-        extwin = newwin(1, messagew-2, winy, winx);
-        if (messagew - 4 < maxlen) maxlen = messagew - 4;
-        pline("#");
-    }
+    char input[BUFSZ];
+    do_getlin(prompt, input, BUFSZ, TRUE);
+    if (!*input)
+        return -1; /* escaped */
 
-    cur_choice[0] = '\0';
+    int i;
+    for (i = 0; extcmdlist[i].ef_txt; i++)
+        if (!strcmpi(input, extcmdlist[i].ef_txt))
+            return i;
 
-    while (1) {
-        wmove(extwin, starty, startx);
-        waddstr(extwin, "# ");
-        wmove(extwin, starty, startx + 2);
-        waddstr(extwin, cur_choice);
-        wmove(extwin, starty, strlen(cur_choice) + startx + 2);
-        wprintw(extwin, "             ");
-
-        /* if we have an autocomplete command, AND it matches uniquely */
-        if (matches == 1) {
-            curses_toggle_color_attr(extwin, NONE, A_UNDERLINE, ON);
-            wmove(extwin, starty, strlen(cur_choice) + startx + 2);
-            wprintw(extwin, "%s", extcmdlist[ret].ef_txt + strlen(cur_choice));
-            curses_toggle_color_attr(extwin, NONE, A_UNDERLINE, OFF);
-            mvwprintw(extwin, starty,
-                      strlen(extcmdlist[ret].ef_txt) + 2, "          ");
-        }
-
-        wrefresh(extwin);
-        letter = wgetch(extwin);
-        prompt_width = strlen(cur_choice);
-        matches = 0;
-
-        if (letter == DOESCAPE || letter == ERR) {
-            ret = -1;
-            break;
-        }
-
-        if ((letter == '\r') || (letter == '\n')) {
-            if (ret == -1) {
-                for (count = 0; extcmdlist[count].ef_txt; count++) {
-                    if (!strcasecmp(cur_choice, extcmdlist[count].ef_txt)) {
-                        ret = count;
-                        break;
-                    }
-                }
-            }
-            break;
-        }
-
-        if ((letter == '\b') || (letter == KEY_BACKSPACE)) {
-            if (prompt_width == 0) {
-                ret = -1;
-                break;
-            } else {
-                cur_choice[prompt_width - 1] = '\0';
-                letter = '*';
-                prompt_width--;
-            }
-        }
-        if (letter != '*' && prompt_width < maxlen) {
-            cur_choice[prompt_width] = letter;
-            cur_choice[prompt_width + 1] = '\0';
-            ret = -1;
-        }
-        for (count = 0; extcmdlist[count].ef_txt; count++) {
-            if (!extcmdlist[count].autocomplete)
-                continue;
-            if (strlen(extcmdlist[count].ef_txt) > prompt_width) {
-                if (strncasecmp(cur_choice, extcmdlist[count].ef_txt,
-                                prompt_width) == 0) {
-                    if ((extcmdlist[count].ef_txt[prompt_width] ==
-                         lowc(letter)) || letter == '*') {
-                        if (matches == 0) {
-                            ret = count;
-                        }
-
-                        matches++;
-                    }
-                }
-            }
-        }
-    }
-
-    curses_destroy_win(extwin);
-    if (extwin2) curses_destroy_win(extwin2);
-    return ret;
+    pline("Unknown extended command: %s", input);
+    return -1;
 }
 
 
