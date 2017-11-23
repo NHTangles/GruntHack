@@ -116,41 +116,33 @@ curses_line_input_dialog(const char *prompt, char *answer, int buffer)
         mvwaddstr(askwin, 0, 1, prompt);
 
     /* Cursor positioning for the prompt */
-    int x = 1;
+    int x = 0; /* within input, which is 1 less than true position. */
     int y = prompt_height;
 
     int i; /* Used to print characters on the input line. */
 
     curs_set(1);
     int answer_ch;
-    int buffer_cnt = 0;
+    int buffer_cnt = 0; /* Length of current input (excludes NULL) */
+    int cursor_pos = 0; /* Cursor position within the input */
     while (1) {
         /* First, print out what we have at the moment on the input line. */
-        x = 1;
-        wmove(askwin, y, x);
+        wmove(askwin, y, 1);
         wattron(askwin, A_UNDERLINE);
-        i = 0;
-        /* Maybe the input wont fit. In that case, skip characters until it
-           does. +2 because we also want to be able to fit the cursor for
-           further input in the end, too. */
-        if (i < (buffer_cnt - width + 2))
-            i = (buffer_cnt - width + 2);
+        i = max(0, (cursor_pos - x));
 
-        /* Now do the existing input */
-        for (; i < buffer_cnt; i++) {
-            waddch(askwin, input[i]);
-            x++;
+        /* Print all the visible input */
+        for (; (i - cursor_pos + x) < (width - 2); i++) {
+            if (i < buffer_cnt)
+                waddch(askwin, input[i]);
+            else
+                waddch(askwin, ' '); /* we're past the end of the string */
         }
-
-        /* If we still have room for more, fill the rest of the line with
-           blank space. */
-        for (i = x; i < (width - 1); i++)
-            waddch(askwin, ' ');
 
         /* Done with outputting current input. Position the cursor and
            query for the next input. */
         wattroff(askwin, A_UNDERLINE);
-        wmove(askwin, y, x);
+        wmove(askwin, y, x + 1);
 
         answer_ch = wgetch(askwin);
         if (answer_ch == KEY_ESCAPE) {
@@ -165,8 +157,18 @@ curses_line_input_dialog(const char *prompt, char *answer, int buffer)
         if (answer_ch >= 256 || buffer_cnt == buffer)
             continue;
 
-        input[buffer_cnt] = answer_ch;
+        /* Add the character at our input at the position we are at.
+           This might shift other characters. */
+        int i = buffer_cnt;
+        while (i > cursor_pos) {
+            input[i] = input[i-1];
+        }
+        input[cursor_pos] = answer_ch;
         buffer_cnt++;
+        cursor_pos++;
+        if (x < (width - 2))
+            x++;
+
         if (!answer_ch)
             break;
     }

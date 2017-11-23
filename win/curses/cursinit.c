@@ -377,7 +377,14 @@ curses_init_nhcolors()
 {
     if (has_colors()) {
         assume_default_colors(COLOR_WHITE, COLOR_BLACK);
+
+        /* Libuncursed bug? Libuncursed will not assign any colors
+           to color pairs unless you have first (tried to) assign
+           one to a higher color pair. So assign a color pair way
+           beyond the range we will use, to make libuncursed do
+           the right thing when we assign the pairs we will use. */
         init_pair(500, COLOR_BLACK, COLOR_BLACK);
+
         int fgcolor = 0;
         int bgcolor = 0;
 
@@ -448,8 +455,6 @@ curses_init_nhcolors()
                     init_color(CURSES_DARK_GRAY, 300, 300, 300);
                 }
 # endif
-            } else {
-                /* Set flag to use bold for bright colors */
             }
         }
     }
@@ -457,7 +462,7 @@ curses_init_nhcolors()
 
 
 /* Allow player to pick character's role, race, gender, and alignment.
-Borrowed from the Gnome window port. */
+   Borrowed from the Gnome window port. */
 
 void
 curses_choose_character()
