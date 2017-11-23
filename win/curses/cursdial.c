@@ -129,10 +129,10 @@ curses_line_input_dialog(const char *prompt, char *answer, int buffer)
         /* First, print out what we have at the moment on the input line. */
         wmove(askwin, y, 1);
         wattron(askwin, A_UNDERLINE);
-        i = max(0, (cursor_pos - x));
 
         /* Print all the visible input */
-        for (; (i - cursor_pos + x) < (width - 2); i++) {
+        for (i = max(0, (cursor_pos - x));
+             (i - cursor_pos + x) < (width - 2); i++) {
             if (i < buffer_cnt)
                 waddch(askwin, input[i]);
             else
@@ -181,8 +181,9 @@ curses_line_input_dialog(const char *prompt, char *answer, int buffer)
             break;
         default:
             /* Character input is valid only for 8bit input,
-               and if our buffer isn't filled. */
-            if (buffer_cnt == buffer ||
+               and if our buffer isn't filled. -1 since we
+               also need to include the null terminator. */
+            if (buffer_cnt == (buffer - 1) ||
                 answer_ch >= 256)
                 break;
 
