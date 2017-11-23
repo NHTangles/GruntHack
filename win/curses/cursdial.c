@@ -144,33 +144,48 @@ curses_line_input_dialog(const char *prompt, char *answer, int buffer)
         wattroff(askwin, A_UNDERLINE);
         wmove(askwin, y, x + 1);
 
+        /* Now we can do the actual poll for input and process it. */
         answer_ch = wgetch(askwin);
+
+        /* See if user is done, or is escaping first. */
         if (answer_ch == KEY_ESCAPE) {
+            /* user escaped, so abort everything. */
             input[0] = '\0';
             break;
-        }
-
-        if (answer_ch == '\r' || answer_ch == '\n' ||
-            answer_ch == KEY_ESCAPE || answer_ch == '\0')
-            answer_ch = '\0';
-
-        if (answer_ch >= 256 || buffer_cnt == buffer)
-            continue;
-
-        /* Add the character at our input at the position we are at.
-           This might shift other characters. */
-        int i = buffer_cnt;
-        while (i > cursor_pos) {
-            input[i] = input[i-1];
-        }
-        input[cursor_pos] = answer_ch;
-        buffer_cnt++;
-        cursor_pos++;
-        if (x < (width - 2))
-            x++;
-
-        if (!answer_ch)
+        } else if (answer_ch == '\r' || answer_ch == '\n' ||
+                   answer_ch == '\0')
             break;
+
+        switch (answer_ch) {
+        case KEY_LEFT:
+            if (cursor_pos) {
+                cursor_pos--;
+                if (x)
+                    x--;
+            }
+            break;
+        default:
+            /* Character input */
+            if (buffer_cnt != buffer &&
+                answer_ch < 256) {
+                /* Add the character at our input at the position
+                   we are at.  This might shift other characters. */
+                int i = buffer_cnt;
+                for (;i > cursor_pos; i--)
+                    input[i] = input[i-1];
+
+                input[cursor_pos] = answer_ch;
+                buffer_cnt++;
+            }
+            /* fallthrough */
+        case KEY_RIGHT:
+            if (cursor_pos < buffer_cnt) {
+                cursor_pos++;
+                if (x < (width - 2))
+                    x++;
+            }
+            break;
+        }
     }
     curs_set(0);
     strcpy(answer, input);
