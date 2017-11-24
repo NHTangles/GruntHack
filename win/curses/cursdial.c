@@ -85,7 +85,9 @@ curses_line_input_dialog(const char *prompt, char *answer, int buffer)
 static void
 do_getlin(const char *prompt, char *answer, int buffer, boolean extcmd)
 {
-    int map_height, map_width, remaining_buf, winx, winy, count;
+    int remaining_buf, winx, winy, count;
+    int map_height, map_width, msg_height, msg_width;
+    int x, y, minx, maxx;
     WINDOW *askwin, *bwin;
     char input[buffer];
     memset(input, 0, buffer);
@@ -93,42 +95,74 @@ do_getlin(const char *prompt, char *answer, int buffer, boolean extcmd)
     int prompt_width = strlen(prompt);
     int prompt_height = 1;
     int height = prompt_height;
-    int width = term_cols - 2;
+    attr_t attr = A_UNDERLINE;
+    int width;
+    /* Have an explicit variable for this. We can't check popup_dialog,
+       because we will ignore that setting if windows haven't been
+       initialized yet. */
+    WINDOW *msgwin = NULL;
 
-    if (iflags.window_inited) {
-        if (!iflags.wc_popup_dialog)
-            return curses_message_win_getline(prompt, answer, buffer);
+    if (!iflags.window_inited)
+        width = term_cols - 2;
+    else if (!iflags.wc_popup_dialog) {
+        msgwin = curses_get_nhwin(MESSAGE_WIN);
+        curses_get_window_size(MESSAGE_WIN, &msg_height, &msg_width);
+        width = msg_width;
+
+        if (curses_window_has_border(MESSAGE_WIN)) {
+            msg_height -= 2;
+        }
+
+        pline("%s", prompt);
+        waddch(msgwin, ' ');
+        wrefresh(msgwin);
+        getyx(msgwin, winy, winx);
+        askwin = msgwin;
+        attr = A_BOLD;
+        if (msg_height == 1)
+            attr = 0;
+
+        /* Cursor positioning */
+        x = 0;
+        y = winy;
+        minx = winx;
+        maxx = width;
+    } else {
         curses_get_window_size(MAP_WIN, &map_height, &map_width);
         width = map_width - 2;
+
+        /* Figure out if we need several lines for the prompt
+           itself. */
+        if (prompt_width + 2 > width)
+            prompt_height = curses_num_lines(prompt, width);
+
+        height = prompt_height;
+        height++; /* Fit the input line. */
+
+        bwin = curses_create_window(width, height,
+                                    iflags.window_inited ? UP :
+                                    CENTER);
+        wrefresh(bwin);
+        getbegyx(bwin, winy, winx);
+        werase(bwin);
+        delwin(bwin);
+        askwin = newwin(height, width, winy + 1, winx + 1);
+
+        if (prompt_width + 2 > width) {
+            for (count = 0; count < prompt_height; count++) {
+                tmpstr = curses_break_str(prompt, width, count + 1);
+                mvwaddstr(askwin, count, 1, tmpstr);
+                free(tmpstr);
+            }
+        } else
+            mvwaddstr(askwin, 0, 1, prompt);
+
+        /* Cursor positioning for the prompt */
+        x = 0; /* relative to input area (defined by minx/maxx) */
+        y = prompt_height;
+        minx = 1;
+        maxx = (width - 1);
     }
-
-    /* Figure out if we need several lines for the prompt itself. */
-    if (prompt_width + 2 > width)
-        prompt_height = curses_num_lines(prompt, width);
-
-    height = prompt_height;
-    height++; /* Fit the input line. */
-
-    bwin = curses_create_window(width, height,
-                                iflags.window_inited ? UP : CENTER);
-    wrefresh(bwin);
-    getbegyx(bwin, winy, winx);
-    werase(bwin);
-    delwin(bwin);
-    askwin = newwin(height, width, winy + 1, winx + 1);
-
-    if (prompt_width + 2 > width) {
-        for (count = 0; count < prompt_height; count++) {
-            tmpstr = curses_break_str(prompt, width, count + 1);
-            mvwaddstr(askwin, count, 1, tmpstr);
-            free(tmpstr);
-        }
-    } else
-        mvwaddstr(askwin, 0, 1, prompt);
-
-    /* Cursor positioning for the prompt */
-    int x = 0; /* within input, which is 1 less than true position. */
-    int y = prompt_height;
 
     int i;
 
@@ -143,12 +177,11 @@ do_getlin(const char *prompt, char *answer, int buffer, boolean extcmd)
     int extcmd_match_total = 0;
     while (1) {
         /* First, print out what we have at the moment on the input line. */
-        wmove(askwin, y, 1);
-        wattron(askwin, A_UNDERLINE);
+        wmove(askwin, y, minx);
+        wattron(askwin, attr);
 
         /* Print all the visible input */
-        for (i = max(0, (cursor_pos - x));
-             (i - cursor_pos + x) < (width - 2); i++) {
+        for (i = (cursor_pos - x); (i - cursor_pos + x + minx) < maxx; i++) {
             if (i < buffer_cnt)
                 waddch(askwin, input[i]);
             else /* we're past the end of the string */
@@ -157,8 +190,8 @@ do_getlin(const char *prompt, char *answer, int buffer, boolean extcmd)
 
         /* Done with outputting current input. Position the cursor and
            query for the next input. */
-        wattroff(askwin, A_UNDERLINE);
-        wmove(askwin, y, x + 1);
+        wattroff(askwin, attr);
+        wmove(askwin, y, x + minx);
 
         /* Now we can do the actual poll for input and process it. */
         answer_ch = wgetch(askwin);
@@ -179,8 +212,8 @@ do_getlin(const char *prompt, char *answer, int buffer, boolean extcmd)
             break;
         case KEY_END:
             x += (buffer_cnt - cursor_pos);
-            if (x > (width - 2))
-                x = (width - 2);
+            if (x > (maxx - minx))
+                x = (maxx - minx);
             cursor_pos = buffer_cnt;
             break;
         case KEY_DC: /* Delete */
@@ -253,7 +286,7 @@ do_getlin(const char *prompt, char *answer, int buffer, boolean extcmd)
         case KEY_RIGHT:
             if (cursor_pos < buffer_cnt) {
                 cursor_pos++;
-                if (x < (width - 2))
+                if (x < (maxx - minx))
                     x++;
             }
             break;
@@ -261,7 +294,10 @@ do_getlin(const char *prompt, char *answer, int buffer, boolean extcmd)
     }
     curs_set(0);
     strcpy(answer, input);
-    curses_destroy_win(askwin);
+    if (!msgwin)
+        curses_destroy_win(askwin);
+    else
+        curses_clear_unhighlight_message_window();
 }
 
 

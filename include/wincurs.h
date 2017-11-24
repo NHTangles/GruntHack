@@ -199,7 +199,6 @@ extern void curses_message_win_puts(const char *message, boolean recursed);
 extern int curses_block(boolean require_tab); /* for MSGTYPE=STOP */
 extern int curses_more(void);
 extern void curses_clear_unhighlight_message_window(void);
-extern void curses_message_win_getline(const char *prompt, char *answer, int buffer);
 extern void curses_last_messages(void);
 extern void curses_init_mesg_history(void);
 extern void curses_prev_mesg(void);
