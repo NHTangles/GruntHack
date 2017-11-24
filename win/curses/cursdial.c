@@ -109,9 +109,8 @@ do_getlin(const char *prompt, char *answer, int buffer, boolean extcmd)
         curses_get_window_size(MESSAGE_WIN, &msg_height, &msg_width);
         width = msg_width;
 
-        if (curses_window_has_border(MESSAGE_WIN)) {
-            msg_height -= 2;
-        }
+        if (!curses_window_has_border(MESSAGE_WIN))
+            width--;
 
         pline("%s", prompt);
         waddch(msgwin, ' ');
