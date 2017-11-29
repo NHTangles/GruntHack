@@ -711,9 +711,10 @@ curses_character_selection(void)
             memcpy(&selection, &old_selection, sizeof selection);
 
             for (let = 'A'; let <= 'Z'; let++) {
-                if (!selection[let])
+                if (!selection[let]) {
                     selection[let] = ROLE_RACEMASK;
-                race_scrollable++;
+                    race_scrollable++;
+                }
             }
 
             break;
@@ -789,8 +790,6 @@ curses_character_selection(void)
         role_height = role_scrollable;
     if (height < (role_height + 1))
         height = (role_height + 1); /* includes header */
-    if (height < role_scrollable + 1)
-        height = role_scrollable + 1;
 
     for (i = 0; races[i].noun; i++)
         if (longest_race < strlen(races[i].noun))
@@ -800,8 +799,10 @@ curses_character_selection(void)
         race_height = race_scrollable;
     if (height < (race_height + 1))
         height = (race_height + 1);
-    if (height < race_scrollable + 1)
-        height = race_scrollable + 1;
+
+    if (role_scrollable && race_scrollable)
+        height = min(role_scrollable + 1, race_scrollable + 1);
+
     height += 2; /* for the role/race/... descriptor */
 
     width += longest_role;
@@ -878,7 +879,7 @@ curses_character_selection(void)
                         let = 'A';
                     else
                         let++;
-                } while (!old_selection[let]);
+                } while (old_selection[let]);
 
                 /* (Temporarily) assign this role to this
                    letter. */
@@ -1035,7 +1036,7 @@ curses_character_selection(void)
 
 /* Main menu. */
 void
-curses_choose_character()
+curses_choose_character(void)
 {
     winid win;
     anything any;
