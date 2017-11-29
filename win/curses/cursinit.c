@@ -592,7 +592,7 @@ role_accel(WINDOW *win, int y, int x, char let,
 static void
 curses_character_selection(void)
 {
-    char let;
+    int let;
     int i, j, pass;
 
     /* First, set up valid choices. */
@@ -808,7 +808,7 @@ curses_character_selection(void)
     /* If the terminal is unreasonably small, just bail out.
        (80x24 handles this fine, as do lower resolutions, up
        to a point). */
-    if (width >= term_cols || term_rows <= 17) {
+    if (width >= term_cols || term_rows < 16) {
         curses_raw_print("Terminal too small to fit the role"
                          "selection menu; picking randomly!");
         return;
@@ -848,7 +848,7 @@ curses_character_selection(void)
         y = 0;
         mvwaddstr(win, y++, x, "    Role");
         let = 'Z';
-        for (i = 0; roles[i].name.m; i++) {
+        for (i = 0; i < role_total; i++) {
             /* Find letter for this role. */
             if (role_scrollable <= 1) {
                 let = 'a';
@@ -884,8 +884,7 @@ curses_character_selection(void)
                                       roles[i].name.m,
                                       selection, 0);
 
-            if ((role_height - 1) <=
-                (i + (role_scrollable ? scroll_offset : 0)))
+            if (y == height - 2)
                 break;
         }
 
@@ -894,8 +893,8 @@ curses_character_selection(void)
         y = 0;
         mvwaddstr(win, y++, x, "    Race");
         let = 'Z';
-        for (i = 0; roles[i].name.m; i++) {
-            if (role_scrollable <= 1) {
+        for (i = 0; i < race_total; i++) {
+            if (race_scrollable <= 1) {
                 let = 'A';
                 while (TRUE) {
                     if (selection[let] == -(i + 1))
@@ -903,7 +902,7 @@ curses_character_selection(void)
                     if (let == 'Z')
                         let = 'a';
                     else if (let == 'z')
-                        panic("No letter for role %d!", i);
+                        panic("No letter for race %d!", i);
                     else
                         let++;
                 }
@@ -927,8 +926,7 @@ curses_character_selection(void)
                                       races[i].noun, selection,
                                       ROLE_RACEMASK);
 
-            if ((race_height - 1) <=
-                (i + (race_scrollable ? scroll_offset : 0)))
+            if (y == height - 2)
                 break;
         }
 
@@ -1002,6 +1000,17 @@ curses_character_selection(void)
             break;
         case '*':
             curses_random_role(FALSE);
+            break;
+        case KEY_UP:
+        case '<':
+            if (scroll_offset)
+                scroll_offset--;
+            break;
+        case KEY_DOWN:
+        case '>':
+            if (role_total > role_height + scroll_offset ||
+                race_total > race_height + scroll_offset)
+                scroll_offset++;
             break;
         default:
             if (let < 0 || let >= 256)
