@@ -73,7 +73,6 @@ static nhmenu *nhmenus = NULL;  /* NetHack menu array */
 
 
 /* Get a line of text from the player, such as asking for a character name or a wish */
-
 void
 curses_line_input_dialog(const char *prompt, char *answer, int buffer)
 {
@@ -299,9 +298,7 @@ do_getlin(const char *prompt, char *answer, int buffer, boolean extcmd)
         curses_clear_unhighlight_message_window();
 }
 
-
 /* Get a single character response from the player, such as a y/n prompt */
-
 int
 curses_character_input_dialog(const char *prompt, const char *choices,
                               CHAR_P def)
@@ -469,7 +466,6 @@ curses_ext_cmd()
     if (iflags.extmenu)
         return extcmd_via_menu();
 
-    /* If we want popup dialogs, just use getlin. */
     const char *prompt = "extended command: (? for help)";
     if (!iflags.wc_popup_dialog)
         prompt = "#"; /* Mimic the tty windowport here */
@@ -625,7 +621,8 @@ curses_finalize_nhmenu(winid wid, const char *prompt)
 /* Display a nethack menu, and return a selection, if applicable */
 
 int
-curses_display_nhmenu(winid wid, int how, MENU_ITEM_P ** _selected)
+curses_display_nhmenu(winid wid, int how, MENU_ITEM_P ** _selected,
+                      boolean avoid_splash_overlap)
 {
     nhmenu *current_menu = get_menu(wid);
     nhmenu_item *menu_item_ptr;
@@ -655,15 +652,17 @@ curses_display_nhmenu(winid wid, int how, MENU_ITEM_P ** _selected)
     menu_win_size(current_menu);
     menu_determine_pages(current_menu);
 
-    /* Display pre and post-game menus centered */
-    if (((moves <= 1) && !invent) || program_state.gameover) {
+    /* Display some pre-game menus below a potential splash screen */
+    if (avoid_splash_overlap)
+        win = curses_create_window(current_menu->width,
+                                   current_menu->height, -1);
+    /* Display (other) pre and post-game menus centered */
+    else if (program_state.gameover)
         win = curses_create_window(current_menu->width,
                                    current_menu->height, CENTER);
-    } else { /* Display during-game menus on the right out of the way */
-
+    else /* Display during-game menus on the right out of the way */
         win = curses_create_window(current_menu->width,
                                    current_menu->height, RIGHT);
-    }
 
     num_chosen = menu_get_selections(win, current_menu, how);
     curses_destroy_win(win);

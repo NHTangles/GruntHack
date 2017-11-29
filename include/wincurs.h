@@ -167,7 +167,8 @@ extern void curses_add_nhmenu_item(winid wid, int glyph, const ANY_P *identifier
                                    CHAR_P accelerator, CHAR_P group_accel, int attr,
                                    const char *str, BOOLEAN_P presel);
 extern void curses_finalize_nhmenu(winid wid, const char *prompt);
-extern int curses_display_nhmenu(winid wid, int how, MENU_ITEM_P **_selected);
+extern int curses_display_nhmenu(winid wid, int how, MENU_ITEM_P **_selected,
+                                 boolean avoid_splash_overlap);
 extern boolean curses_menu_exists(winid wid);
 extern void curses_del_menu(winid wid);
 
@@ -190,7 +191,7 @@ extern void curses_init_nhcolors(void);
 extern void curses_choose_character(void);
 extern int curses_character_dialog(const char** choices, const char *prompt);
 extern void curses_init_options(void);
-extern void curses_display_splash_window(void);
+extern int curses_display_splash_window(boolean count_only);
 extern void curses_cleanup(void);
 
 /* cursmesg.c */
