@@ -494,6 +494,17 @@ curses_random_role(boolean respect_config)
                                flags.initgend, flags.initalign);
     flags.initalign = pick_align(flags.initrole, flags.initrace,
                                  flags.initgend, flags.initalign);
+
+    /* Don't let the role selector crash if this resulted in an invalid selection.
+       This should never happen unless the game engine is doing something stupid... */
+    if (flags.initrole < 0)
+        flags.initrole = 0;
+    if (flags.initrace < 0)
+        flags.initrace = 0;
+    if (flags.initgend < 0)
+        flags.initgend = 0;
+    if (flags.initalign < 0)
+        flags.initalign = 0;
 }
 
 static int
@@ -612,22 +623,19 @@ curses_character_selection(void)
 
     /* Reserve qMFLNC */
     selection['q'] = -1; /* quit */
-    selection['M'] = ROLE_MALE; /* Male */
-    selection['F'] = ROLE_FEMALE; /* Female */
-    selection['L'] = ROLE_LAWFUL; /* Lawful */
-    selection['N'] = ROLE_NEUTRAL; /* Neutral */
-    selection['C'] = ROLE_CHAOTIC; /* Chaotic */
+    selection['M'] = ROLE_MALE;
+    selection['F'] = ROLE_FEMALE;
+    selection['L'] = ROLE_LAWFUL;
+    selection['N'] = ROLE_NEUTRAL;
+    selection['C'] = ROLE_CHAOTIC;
 
     /*
      * Do 4 passes when trying to assign roles/races to letters.
-     * Races will only use A-Z, roles will prefer a-z but can
-     * use both.
-     *
-     * 1: Attempt first letter. For race, only attempt uppercase
+     * 1: Attempt first letter
      * 2: Attempt other letters in the race name
      * 3: Attempt any other free letter
-     * 4: Assign leftover letters (uppercase for race) and
-     *    create a scrollable window part.
+     * 4: Assign leftover letters (lowercase for role, uppercase for race) and create a
+     *    scrollable window part.
      */
     memcpy(&old_selection, &selection, sizeof selection);
     pass = 0;
@@ -914,8 +922,6 @@ curses_character_selection(void)
                         let++;
                 } while (old_selection[let] != ROLE_RACEMASK);
 
-                /* (Temporarily) assign this role to this
-                   letter. */
                 selection[let] = -(i + 1);
             }
 
