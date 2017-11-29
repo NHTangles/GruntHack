@@ -460,13 +460,40 @@ curses_init_nhcolors()
     }
 }
 
+/* Pick a random role/etc. If respect_config is TRUE, only randomize
+   missing entries. */
 static void
 curses_random_role(boolean respect_config)
 {
-    flags.initrole = 9;
-    flags.initrace = 0;
-    flags.initgend = 1;
-    flags.initalign = 1;
+    if (!respect_config) {
+        flags.initrole = ROLE_RANDOM;
+        flags.initrace = ROLE_RANDOM;
+        flags.initgend = ROLE_RANDOM;
+        flags.initalign = ROLE_RANDOM;
+    }
+
+    /* Free up invalid choices. */
+    if (!ok_align(flags.initrole, flags.initrace, flags.initgend,
+                  flags.initalign))
+        flags.initalign = ROLE_RANDOM;
+    if (!ok_gend(flags.initrole, flags.initrace, flags.initgend,
+                 flags.initalign))
+        flags.initgend = ROLE_RANDOM;
+    if (!ok_race(flags.initrole, flags.initrace, flags.initgend,
+                 flags.initalign))
+        flags.initrace = ROLE_RANDOM;
+    if (!ok_role(flags.initrole, flags.initrace, flags.initgend,
+                 flags.initalign))
+        flags.initrole = ROLE_RANDOM;
+
+    flags.initrole = pick_role(flags.initrole, flags.initrace,
+                               flags.initgend, flags.initalign);
+    flags.initrace = pick_race(flags.initrole, flags.initrace,
+                               flags.initgend, flags.initalign);
+    flags.initgend = pick_gend(flags.initrole, flags.initrace,
+                               flags.initgend, flags.initalign);
+    flags.initalign = pick_align(flags.initrole, flags.initrace,
+                                 flags.initgend, flags.initalign);
 }
 
 static int
@@ -972,6 +999,9 @@ curses_character_selection(void)
                     break;
 
             flags.initalign = i;
+            break;
+        case '*':
+            curses_random_role(FALSE);
             break;
         default:
             if (let < 0 || let >= 256)
