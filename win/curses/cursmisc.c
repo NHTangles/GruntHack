@@ -718,6 +718,9 @@ curses_convert_keys(int key)
     /* Handle arrow keys */
     switch (key) {
     case KEY_LEFT:
+#ifdef KEY_B1
+    case KEY_B1:
+#endif
         if (iflags.num_pad) {
             ret = '4';
         } else {
@@ -725,6 +728,9 @@ curses_convert_keys(int key)
         }
         break;
     case KEY_RIGHT:
+#ifdef KEY_B3
+    case KEY_B3:
+#endif
         if (iflags.num_pad) {
             ret = '6';
         } else {
@@ -732,6 +738,9 @@ curses_convert_keys(int key)
         }
         break;
     case KEY_UP:
+#ifdef KEY_A2
+    case KEY_A2:
+#endif
         if (iflags.num_pad) {
             ret = '8';
         } else {
@@ -739,48 +748,55 @@ curses_convert_keys(int key)
         }
         break;
     case KEY_DOWN:
+#ifdef KEY_C2
+    case KEY_C2:
+#endif
         if (iflags.num_pad) {
             ret = '2';
         } else {
             ret = 'j';
         }
         break;
+    case KEY_HOME:
 #ifdef KEY_A1
     case KEY_A1:
+#endif
         if (iflags.num_pad) {
             ret = '7';
         } else {
             ret = 'y';
         }
         break;
-#endif /* KEY_A1 */
+    case KEY_PPAGE:
 #ifdef KEY_A3
     case KEY_A3:
+#endif
         if (iflags.num_pad) {
             ret = '9';
         } else {
             ret = 'u';
         }
         break;
-#endif /* KEY_A3 */
+    case KEY_END:
 #ifdef KEY_C1
     case KEY_C1:
+#endif
         if (iflags.num_pad) {
             ret = '1';
         } else {
             ret = 'b';
         }
         break;
-#endif /* KEY_C1 */
+    case KEY_NPAGE:
 #ifdef KEY_C3
     case KEY_C3:
+#endif
         if (iflags.num_pad) {
             ret = '3';
         } else {
             ret = 'n';
         }
         break;
-#endif /* KEY_C3 */
 #ifdef KEY_B2
     case KEY_B2:
         if (iflags.num_pad) {
