@@ -1071,6 +1071,20 @@ curses_character_selection(void)
                 break;
         }
 
+        /* Potentially show scroll info */
+        int scroll_height = max(role_height, race_height);
+        int scroll_total = max(role_total, race_total);
+        int curpage = (scroll_offset / scroll_height + 1);
+        int lastpage = ((scroll_total - 1) / scroll_height + 1);
+        boolean at_top = !!(curpage == 1);
+        boolean at_bottom = !!(curpage == lastpage);
+        if (lastpage > 1) {
+            mvwprintw(win, height - 2, 0,
+                      "%s (Page %d of %d) %s",
+                      !at_top ? "<=" : "  ", curpage, lastpage,
+                      !at_bottom ? "=>" : "  ");
+        }
+
         /* 3rd column */
         x = col3_start;
         y = 0;
@@ -1121,13 +1135,12 @@ curses_character_selection(void)
         int desc = selection[let].desc;
         if (let == '*')
             curses_random_role(FALSE);
-        else if (let == KEY_UP || let == '<') {
-            if (scroll_offset)
-                scroll_offset--;
-        } else if (let == KEY_DOWN || let == '>') {
-            if (role_total > role_height + scroll_offset ||
-                race_total > race_height + scroll_offset)
-                scroll_offset++;
+        else if (let == KEY_PPAGE || let == '<') {
+            if (curpage > 1)
+                scroll_offset -= scroll_height;
+        } else if (let == KEY_NPAGE || let == '>') {
+            if (curpage < lastpage)
+                scroll_offset += scroll_height;
         } else {
             switch (typ) {
             case CR_ROLE:
