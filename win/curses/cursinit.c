@@ -1072,7 +1072,7 @@ curses_character_selection(void)
         }
 
         /* Potentially show scroll info */
-        int scroll_height = max(role_height, race_height);
+        int scroll_height = height - 3;
         int scroll_total = max(role_total, race_total);
         int curpage = (scroll_offset / scroll_height + 1);
         int lastpage = ((scroll_total - 1) / scroll_height + 1);
