@@ -32,6 +32,11 @@ typedef struct nhrgb_type {
     short b;
 } nhrgb;
 
+struct rolestat {
+    enum roletyp typ;
+    int desc;
+};
+
 nhrgb orig_yellow;
 nhrgb orig_white;
 nhrgb orig_darkgray;
@@ -460,6 +465,168 @@ curses_init_nhcolors()
     }
 }
 
+/* Returns the index into roles[]/races[]/genders[]/aligns[]
+   by permons (role/race) or by allow (gend/align).
+   Returns -1 on failure. */
+static int
+curses_get_roleid_by_desc(enum roletyp typ, int desc)
+{
+    int i;
+
+    switch (typ) {
+    case CR_ROLE:
+        for (i = 0; roles[i].name.m; i++)
+            if (roles[i].malenum == desc ||
+                roles[i].femalenum == desc)
+                return i;
+        break;
+    case CR_RACE:
+        for (i = 0; races[i].noun; i++)
+            if (races[i].malenum == desc ||
+                races[i].femalenum == desc)
+                return i;
+        break;
+    case CR_GEND:
+        for (i = 0; i < ROLE_GENDERS; i++)
+            if (genders[i].allow == desc)
+                return i;
+        break;
+    case CR_ALIGN:
+        for (i = 0; i < ROLE_ALIGNS; i++)
+            if (aligns[i].allow == desc)
+                return i;
+        break;
+    default:
+        break;
+    }
+
+    return -1;
+}
+
+/* Sets the selected rolestat to the given type. If by_id is
+   TRUE, sets desc directly. If not, look up the relevant
+   role/race/gender/alignment struct and set by permonst
+   (role/race) or by allow (gend/align). */
+static void
+curses_set_rolestat(struct rolestat *selection, int let,
+                    enum roletyp typ, int desc, boolean by_id)
+{
+    if (by_id)
+        selection[let].desc = desc;
+    else {
+        int id;
+        id = curses_get_roleid_by_desc(typ, desc);
+        if (id == -1)
+            return; /* invalid */
+
+        selection[let].desc = id;
+    }
+
+    selection[let].typ = typ;
+}
+
+/* Returns TRUE if the rolestate is the given type. */
+static boolean
+curses_rolestat_is(struct rolestat *selection, int let,
+                   enum roletyp typ, int desc, boolean by_id)
+{
+    int id = desc;
+    if (!by_id)
+        id = curses_get_roleid_by_desc(typ, desc);
+
+    if (selection[let].typ == typ && selection[let].desc == id)
+        return TRUE;
+
+    return FALSE;
+}
+
+/* Returns TRUE if the given accelerator is available. */
+static boolean
+curses_rolestat_free(struct rolestat *selection, int let)
+{
+    return !!(selection[let].typ == CR_NONE);
+}
+
+/* Returns TRUE if the given accelerator is selected. */
+static boolean
+curses_rolestat_selected(struct rolestat *selection, int let)
+{
+    switch (selection[let].typ) {
+    case CR_ROLE:
+        return !!(flags.initrole == selection[let].desc);
+    case CR_RACE:
+        return !!(flags.initrace == selection[let].desc);
+    case CR_GEND:
+        return !!(flags.initgend == selection[let].desc);
+    case CR_ALIGN:
+        return !!(flags.initalign == selection[let].desc);
+    default:
+        break;
+    }
+
+    return FALSE;
+}
+
+/* Returns TRUE if the given accelerator is valid given
+   the current role/race/gender/alignment selection. */
+static boolean
+curses_rolestat_valid(struct rolestat *selection, int let)
+{
+    switch (selection[let].typ) {
+    case CR_ROLE:
+        return ok_role(selection[let].desc, flags.initrace,
+                       flags.initgend, flags.initalign);
+    case CR_RACE:
+        return ok_race(flags.initrole, selection[let].desc,
+                       flags.initgend, flags.initalign);
+    case CR_GEND:
+        return ok_gend(flags.initrole, flags.initrace,
+                       selection[let].desc, flags.initalign);
+    case CR_ALIGN:
+        return ok_align(flags.initrole, flags.initrace,
+                       flags.initgend, selection[let].desc);
+    default:
+        break;
+    }
+
+    /* otherwise, return FALSE if *any* of our current
+       selections are invalid. */
+    if (ok_role(flags.initrole, flags.initrace,
+                flags.initgend, flags.initalign) &&
+        ok_race(flags.initrole, flags.initrace,
+                flags.initgend, flags.initalign) &&
+        ok_gend(flags.initrole, flags.initrace,
+                flags.initgend, flags.initalign) &&
+        ok_align(flags.initrole, flags.initrace,
+                flags.initgend, flags.initalign))
+        return TRUE;
+
+    return FALSE;
+}
+
+/* Returns a string description for a role/race/gender/align
+   by accelerator. */
+static const char *
+curses_rolestat_str(struct rolestat *selection, int let)
+{
+    int desc = selection[let].desc;
+
+    switch (selection[let].typ) {
+    case CR_ROLE:
+        return roles[desc].name.m;
+    case CR_RACE:
+        return races[desc].noun;
+    case CR_GEND:
+        return genders[desc].adj;
+    case CR_ALIGN:
+        return aligns[desc].adj;
+    case CR_SPECIAL:
+        return "play!"; /* the "play" accelerator */
+    default:
+        return "???";
+    }
+}
+
 /* Pick a random role/etc. If respect_config is TRUE, only randomize
    missing entries. */
 static void
@@ -508,90 +675,33 @@ curses_random_role(boolean respect_config)
 }
 
 static int
-role_accel(WINDOW *win, int y, int x, char let,
-           const char *str, int *selection, int what)
+role_accel(WINDOW *win, int y, int x, struct rolestat *selection,
+           int let)
 {
     attr_t attr = curses_color_attr(CLR_GRAY, 0);
     attr_t attrselected = curses_color_attr(CLR_WHITE, 0);
     attr_t attrinvalid = curses_color_attr(CLR_BROWN, 0);
     attr_t attrinvalid_selected = curses_color_attr(CLR_YELLOW, 0);
-    boolean selected = FALSE;
-    boolean invalid = FALSE;
+    boolean selected = curses_rolestat_selected(selection, let);
+    boolean invalid = !curses_rolestat_valid(selection, let);
     char selch = '-';
     int ret = 0;
-    int i;
-
-    /* Map flags.init* to potential choice in selection[let] */
-    int choice = 0;
-    switch (what) {
-    case 0: /* role */
-        choice = (flags.initrole + 1);
-        invalid = !ok_role(selection[let] - 1, flags.initrace,
-                           flags.initgend, flags.initalign);
-        break;
-    case ROLE_RACEMASK:
-        choice = -(flags.initrace + 1);
-        invalid = !ok_race(flags.initrole, -selection[let] - 1,
-                           flags.initgend, flags.initalign);
-        break;
-    case ROLE_GENDMASK:
-        choice = genders[flags.initgend].allow;
-
-        /* To figure out if a choice is invalid, we need to convert
-           back to gender iteration. */
-        for (i = 0; i < ROLE_GENDERS; i++) {
-            if (genders[i].allow == selection[let]) {
-                invalid = !ok_gend(flags.initrole, flags.initrace,
-                                   i, flags.initalign);
-                break;
-            }
-        }
-
-        break;
-    case ROLE_ALIGNMASK:
-        choice = aligns[flags.initalign].allow;
-        for (i = 0; i < ROLE_ALIGNS; i++) {
-            if (aligns[i].allow == selection[let]) {
-                invalid = !ok_align(flags.initrole, flags.initrace,
-                                    flags.initgend, i);
-                break;
-            }
-        }
-
-        break;
-    default: /* the "play!" accelerator is never selected */
-        break;
-    }
-
-    /* Is the choice selected? */
-    if (choice && selection[let] == choice) {
-        selected = TRUE;
-        selch = '+';
+    if (selected) {
         attr = attrselected;
-    }
-
-    /* Is any choice at all invalid? */
-    if (what == -1 &&
-        (!ok_role(flags.initrole, flags.initrace, flags.initgend,
-                  flags.initalign) ||
-         !ok_race(flags.initrole, flags.initrace, flags.initgend,
-                  flags.initalign) ||
-         !ok_gend(flags.initrole, flags.initrace, flags.initgend,
-                  flags.initalign) ||
-         !ok_align(flags.initrole, flags.initrace, flags.initgend,
-                   flags.initalign))) {
-        invalid = TRUE;
-        ret = 1;
-    }
-
-    if (invalid) {
-        attr = attrinvalid;
-        if (selected) {
-            selch = '!';
+        selch = '+';
+        if (invalid) {
             attr = attrinvalid_selected;
+            selch = '!';
             ret = 1;
         }
-    }
+    } else if (invalid)
+        attr = attrinvalid;
+
+    /* Create a temporary char so we can make the initial
+       character always be in uppercase. */
+    char str[BUFSZ];
+    strcpy(str, curses_rolestat_str(selection, let));
+    str[0] = toupper(str[0]);
 
     wattron(win, attr);
     mvwprintw(win, y, x, "%c %c %s", let, selch, str);
@@ -607,8 +717,8 @@ curses_character_selection(void)
     int i, j, pass;
 
     /* First, set up valid choices. */
-    int selection[256];
-    int old_selection[256];
+    struct rolestat selection[256];
+    struct rolestat old_selection[256];
     memset(&selection, 0, sizeof selection);
 
     /* For scrollable, 1 means scrollable but w/o overlapping
@@ -622,12 +732,18 @@ curses_character_selection(void)
     char rolestr[BUFSZ];
 
     /* Reserve qMFLNC */
-    selection['q'] = -1; /* quit */
-    selection['M'] = ROLE_MALE;
-    selection['F'] = ROLE_FEMALE;
-    selection['L'] = ROLE_LAWFUL;
-    selection['N'] = ROLE_NEUTRAL;
-    selection['C'] = ROLE_CHAOTIC;
+    curses_set_rolestat(selection, '.', CR_SPECIAL, 0, TRUE);
+    curses_set_rolestat(selection, 'q', CR_SPECIAL, 0, TRUE);
+    curses_set_rolestat(selection, 'M', CR_GEND,
+                        ROLE_MALE, FALSE);
+    curses_set_rolestat(selection, 'F', CR_GEND,
+                        ROLE_FEMALE, FALSE);
+    curses_set_rolestat(selection, 'L', CR_ALIGN,
+                        ROLE_LAWFUL, FALSE);
+    curses_set_rolestat(selection, 'N', CR_ALIGN,
+                        ROLE_NEUTRAL, FALSE);
+    curses_set_rolestat(selection, 'C', CR_ALIGN,
+                        ROLE_CHAOTIC, FALSE);
 
     /*
      * Do 4 passes when trying to assign roles/races to letters.
@@ -650,7 +766,7 @@ curses_character_selection(void)
             /* Reserve all (free) lowercase letters for roles
                and create a scrollable race selection. */
             for (let = 'a'; let <= 'z'; let++) {
-                if (!selection[let])
+                if (curses_rolestat_free(selection, let))
                     role_scrollable++;
             }
 
@@ -666,37 +782,49 @@ curses_character_selection(void)
                 let = tolower(roles[i].name.m[j]);
 
                 /* Maybe this race has been assigned already. */
-                if (selection[let] == (i + 1))
+                if (curses_rolestat_is(selection, let,
+                                       CR_ROLE, i, TRUE))
                     break;
 
                 /* Is the letter free? */
-                if (!selection[let]) {
-                    selection[let] = (i + 1);
+                if (curses_rolestat_free(selection, let)) {
+                    curses_set_rolestat(selection, let,
+                                        CR_ROLE, i, TRUE);
                     break;
                 }
 
                 /* Now try uppercase */
                 let = toupper(let);
 
-                if (selection[let] == (i + 1))
+                if (curses_rolestat_is(selection, let,
+                                       CR_ROLE, i, TRUE))
                     break;
 
-                if (!selection[let]) {
-                    selection[let] = (i + 1);
+                if (curses_rolestat_free(selection, let)) {
+                    curses_set_rolestat(selection, let,
+                                        CR_ROLE, i, TRUE);
                     break;
                 }
             }
 
-            if (pass == 3 && selection[let] != (i + 1)) {
+            /* For pass 3, try any letter. */
+            if (pass == 3 &&
+                !curses_rolestat_is(selection, let, CR_ROLE,
+                                    i, TRUE)) {
                 for (let = 'a'; let <= 'z'; let++) {
-                    if (!selection[let]) {
-                        selection[let] = (i + 1);
+                    if (curses_rolestat_free(selection,
+                                             let)) {
+                        curses_set_rolestat(selection, let,
+                                            CR_ROLE, i, TRUE);
                         break;
                     }
                 }
             }
 
-            if (selection[let] != (i + 1))
+            /* If we failed to find a letter for any role in
+               this pass, mark races as unfinished. */
+            if (!curses_rolestat_is(selection, let, CR_ROLE,
+                                    i, TRUE))
                 roles_done = FALSE;
         }
     } while (!roles_done);
@@ -711,10 +839,8 @@ curses_character_selection(void)
             memcpy(&selection, &old_selection, sizeof selection);
 
             for (let = 'A'; let <= 'Z'; let++) {
-                if (!selection[let]) {
-                    selection[let] = ROLE_RACEMASK;
+                if (curses_rolestat_free(selection, let))
                     race_scrollable++;
-                }
             }
 
             break;
@@ -727,38 +853,44 @@ curses_character_selection(void)
 
                 let = toupper(races[i].noun[j]);
 
-                if (selection[let] == -(i + 1))
+                if (curses_rolestat_is(selection, let,
+                                       CR_RACE, i, TRUE))
                     break;
 
-                if (!selection[let]) {
-                    selection[let] = -(i + 1);
+                if (curses_rolestat_free(selection, let)) {
+                    curses_set_rolestat(selection, let,
+                                        CR_RACE, i, TRUE);
                     break;
                 }
 
                 let = tolower(let);
 
-                if (selection[let] == -(i + 1))
+                if (curses_rolestat_is(selection, let,
+                                       CR_RACE, i, TRUE))
                     break;
 
-                if (!selection[let]) {
-                    selection[let] = -(i + 1);
+                if (curses_rolestat_free(selection, let)) {
+                    curses_set_rolestat(selection, let,
+                                        CR_RACE, i, TRUE);
                     break;
                 }
             }
 
-            /* For pass 3, try any uppercase letter. */
-            if (pass == 3 && selection[let] != -(i + 1)) {
+            if (pass == 3 &&
+                !curses_rolestat_is(selection, let, CR_RACE,
+                                    i, TRUE)) {
                 for (let = 'A'; let <= 'Z'; let++) {
-                    if (!selection[let]) {
-                        selection[let] = -(i + 1);
+                    if (curses_rolestat_free(selection,
+                                             let)) {
+                        curses_set_rolestat(selection, let,
+                                            CR_RACE, i, TRUE);
                         break;
                     }
                 }
             }
 
-            /* If we failed to find a valid letter for any race
-               in this pass, mark races as unfinished. */
-            if (selection[let] != -(i + 1))
+            if (!curses_rolestat_is(selection, let, CR_RACE,
+                                    i, TRUE))
                 races_done = FALSE;
         }
     } while (!races_done);
@@ -856,13 +988,14 @@ curses_character_selection(void)
         x = 0;
         y = 0;
         mvwaddstr(win, y++, x, "    Role");
-        let = 'Z';
+        let = 'z';
         for (i = 0; i < role_total; i++) {
             /* Find letter for this role. */
             if (role_scrollable <= 1) {
                 let = 'a';
                 while (TRUE) {
-                    if (selection[let] == (i + 1))
+                    if (curses_rolestat_is(selection, let,
+                                           CR_ROLE, i, TRUE))
                         break;
                     if (let == 'z')
                         let = 'A';
@@ -873,25 +1006,24 @@ curses_character_selection(void)
                 }
             } else {
                 do {
-                    if (let == 'Z')
+                    if (let == 'z')
                         let = 'a';
-                    else if (let == 'z')
-                        let = 'A';
                     else
                         let++;
-                } while (old_selection[let]);
+                } while (!curses_rolestat_free(old_selection,
+                                               let));
 
                 /* (Temporarily) assign this role to this
                    letter. */
-                selection[let] = (i + 1);
+                curses_set_rolestat(selection, let, CR_ROLE,
+                                    i, TRUE);
             }
 
             if (role_scrollable && scroll_offset > i)
                 continue;
 
-            any_invalid |= role_accel(win, y++, x, let,
-                                      roles[i].name.m,
-                                      selection, 0);
+            any_invalid |= role_accel(win, y++, x,
+                                      selection, let);
 
             if (y == height - 2)
                 break;
@@ -906,7 +1038,8 @@ curses_character_selection(void)
             if (race_scrollable <= 1) {
                 let = 'A';
                 while (TRUE) {
-                    if (selection[let] == -(i + 1))
+                    if (curses_rolestat_is(selection, let,
+                                           CR_RACE, i, TRUE))
                         break;
                     if (let == 'Z')
                         let = 'a';
@@ -921,17 +1054,18 @@ curses_character_selection(void)
                         let = 'A';
                     else
                         let++;
-                } while (old_selection[let] != ROLE_RACEMASK);
+                } while (!curses_rolestat_free(old_selection,
+                                               let));
 
-                selection[let] = -(i + 1);
+                curses_set_rolestat(selection, let, CR_RACE,
+                                    i, TRUE);
             }
 
             if (race_scrollable && scroll_offset > i)
                 continue;
 
-            any_invalid |= role_accel(win, y++, x, let,
-                                      races[i].noun, selection,
-                                      ROLE_RACEMASK);
+            any_invalid |= role_accel(win, y++, x,
+                                      selection, let);
 
             if (y == height - 2)
                 break;
@@ -941,24 +1075,18 @@ curses_character_selection(void)
         x = col3_start;
         y = 0;
         mvwaddstr(win, y++, x, "    Gender");
-        any_invalid |= role_accel(win, y++, x, 'M', "Male",
-                                  selection, ROLE_GENDMASK);
-        any_invalid |= role_accel(win, y++, x, 'F', "Female",
-                                  selection, ROLE_GENDMASK);
+        any_invalid |= role_accel(win, y++, x, selection, 'M');
+        any_invalid |= role_accel(win, y++, x, selection, 'F');
         mvwaddstr(win, y++, x, "");
         mvwaddstr(win, y++, x, "    Alignment");
-        any_invalid |= role_accel(win, y++, x, 'L', "Lawful",
-                                  selection, ROLE_ALIGNMASK);
-        any_invalid |= role_accel(win, y++, x, 'N', "Neutral",
-                                  selection, ROLE_ALIGNMASK);
-        any_invalid |= role_accel(win, y++, x, 'C', "Chaotic",
-                                  selection, ROLE_ALIGNMASK);
+        any_invalid |= role_accel(win, y++, x, selection, 'L');
+        any_invalid |= role_accel(win, y++, x, selection, 'N');
+        any_invalid |= role_accel(win, y++, x, selection, 'C');
         mvwaddstr(win, y++, x, "");
         mvwaddstr(win, y++, x, "");
         mvwaddstr(win, y++, x, "q - quit");
         mvwaddstr(win, y++, x, "* - random");
-        any_invalid |= role_accel(win, y++, x, '.', "play!",
-                                  selection, -1);
+        any_invalid |= role_accel(win, y++, x, selection, '.');
 
         /* Describe the current selection, or if it is
            invalid. */
@@ -970,6 +1098,9 @@ curses_character_selection(void)
                     aligns[flags.initalign].adj,
                     genders[flags.initgend].adj,
                     races[flags.initrace].adj,
+                    flags.initgend == ROLE_FEMALE &&
+                    roles[flags.initrole].name.f ?
+                    roles[flags.initrole].name.f :
                     roles[flags.initrole].name.m);
             mvwaddstr(win, height - 1, 0, rolestr);
         }
@@ -986,48 +1117,34 @@ curses_character_selection(void)
             return;
         }
 
-        switch (let) {
-        case 'M':
-        case 'F':
-            /* Convert to genders[] index */
-            for (i = 0; i < ROLE_GENDERS; i++)
-                if (selection[let] == genders[i].allow)
-                    break;
-
-            flags.initgend = i;
-            break;
-        case 'L':
-        case 'N':
-        case 'C':
-            for (i = 0; i < ROLE_ALIGNS; i++)
-                if (selection[let] == aligns[i].allow)
-                    break;
-
-            flags.initalign = i;
-            break;
-        case '*':
+        int typ = selection[let].typ;
+        int desc = selection[let].desc;
+        if (let == '*')
             curses_random_role(FALSE);
-            break;
-        case KEY_UP:
-        case '<':
+        else if (let == KEY_UP || let == '<') {
             if (scroll_offset)
                 scroll_offset--;
-            break;
-        case KEY_DOWN:
-        case '>':
+        } else if (let == KEY_DOWN || let == '>') {
             if (role_total > role_height + scroll_offset ||
                 race_total > race_height + scroll_offset)
                 scroll_offset++;
-            break;
-        default:
-            if (let < 0 || let >= 256)
+        } else {
+            switch (typ) {
+            case CR_ROLE:
+                flags.initrole = desc;
                 break;
-
-            if (selection[let] > 0) /* role */
-                flags.initrole = selection[let] - 1;
-            else if (selection[let] < 0) /* race */
-                flags.initrace = -selection[let] - 1;
-            break;
+            case CR_RACE:
+                flags.initrace = desc;
+                break;
+            case CR_GEND:
+                flags.initgend = desc;
+                break;
+            case CR_ALIGN:
+                flags.initalign = desc;
+                break;
+            default:
+                break;
+            }
         }
 
         curses_destroy_win(win);

@@ -47,8 +47,7 @@ boolean counting;   /* Count window is active */
 #endif
 
 
-typedef enum orient_type
-{
+typedef enum orient_type {
     CENTER,
     UP,
     DOWN,
@@ -57,6 +56,14 @@ typedef enum orient_type
     UNDEFINED
 } orient;
 
+enum roletyp {
+    CR_NONE,
+    CR_ROLE,
+    CR_RACE,
+    CR_GEND,
+    CR_ALIGN,
+    CR_SPECIAL,
+};
 
 /* cursmain.c */
 
