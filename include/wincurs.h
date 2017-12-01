@@ -139,6 +139,7 @@ extern boolean curses_map_borders(int *sx, int *sy, int *ex, int *ey,
 
 /* cursmisc.c */
 
+extern int curses_getch(WINDOW *, void (*callback) (void *), void *arg);
 extern int curses_read_char(void);
 extern void curses_toggle_color_attr(WINDOW *win, int color, int attr, int onoff);
 extern void curses_bail(const char *mesg);

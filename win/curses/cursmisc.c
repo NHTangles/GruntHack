@@ -32,8 +32,46 @@ static int parse_escape_sequence(void);
 #endif
 
 
-/* Read a character of input from the user */
+/* Returns a character of input from the user. Performs resize handling
+   if needed. If win is non-NULL, use wgetch (which will refresh that
+   window). Otherwise, use the libuncursed-specific timeout_get_wch,
+   which will not. If a resize happens, call the callback function.
+   Handles KEY_RESIZE, so this will never return KEY_RESIZE. */
+int
+curses_getch(WINDOW *win, void (*callback) (void *), void *arg)
+{
+    int ch;
+    while (TRUE) {
+        do {
+            if (win)
+                ch = wgetch(win);
+            else
+                timeout_get_wch(-1, &ch);
+        } while (!ch);
 
+        if (ch == KEY_RESIZE) {
+            /* Figure out if the terminal was really resized */
+            int old_term_rows = term_rows;
+            int old_term_cols = term_cols;
+            getmaxyx(base_term, term_rows, term_cols);
+            if (term_rows != old_term_rows || term_cols != old_term_cols) {
+                /* Redraw windows in general. This will update term_rows/cols */
+                curses_create_main_windows();
+                curses_last_messages();
+                doredraw();
+
+                /* Potentially call our callback */
+                if (callback)
+                    (*callback) (arg);
+            }
+        } else
+            break; /* we got our key */
+    }
+
+    return ch;
+}
+
+/* Read a character of input from the user */
 int
 curses_read_char()
 {
