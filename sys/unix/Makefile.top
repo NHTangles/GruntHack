@@ -14,17 +14,16 @@
 # MAKE = make
 
 # make GruntHack
-PREFIX	 = /usr
+PREFIX	 = /opt/games
 GAME     = grunthack
-# GAME     = grunthack.prg
 GAMEUID  = games
-GAMEGRP  = bin
+GAMEGRP  = games
 
 # Permissions - some places use setgid instead of setuid, for instance
 # See also the option "SECURE" in include/config.h
-GAMEPERM = 04755
+GAMEPERM = 4755
 FILEPERM = 0644
-EXEPERM  = 0755
+EXEPERM  = 4755
 DIRPERM  = 0755
 
 # GAMEDIR also appears in config.h as "HACKDIR".
@@ -35,14 +34,14 @@ DIRPERM  = 0755
 # therefore there should not be anything in GAMEDIR that you want to keep
 # (if there is, you'll have to do the installation by hand or modify the
 # instructions)
-GAMEDIR  = $(PREFIX)/games/lib/$(GAME)dir
+GAMEDIR  = $(PREFIX)/lib/$(GAME)dir
 VARDIR  = $(GAMEDIR)
-SHELLDIR = $(PREFIX)/games
+SHELLDIR = $(PREFIX)/bin
 
 # per discussion in Install.X11 and Install.Qt
-# VARDATND =
+VARDATND =
 # VARDATND = x11tiles GruntHack.ad pet_mark.xbm
-VARDATND = x11tiles GruntHack.ad pet_mark.xbm rip.xpm
+# VARDATND = x11tiles GruntHack.ad pet_mark.xbm rip.xpm
 # for Atari/Gem
 # VARDATND = nh16.img title.img GEM_RSC.RSC rip.img
 # for BeOS
