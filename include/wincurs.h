@@ -47,8 +47,7 @@ boolean counting;   /* Count window is active */
 #endif
 
 
-typedef enum orient_type
-{
+typedef enum orient_type {
     CENTER,
     UP,
     DOWN,
@@ -57,6 +56,14 @@ typedef enum orient_type
     UNDEFINED
 } orient;
 
+enum roletyp {
+    CR_NONE,
+    CR_ROLE,
+    CR_RACE,
+    CR_GEND,
+    CR_ALIGN,
+    CR_SPECIAL,
+};
 
 /* cursmain.c */
 
@@ -132,6 +139,7 @@ extern boolean curses_map_borders(int *sx, int *sy, int *ex, int *ey,
 
 /* cursmisc.c */
 
+extern int curses_getch(WINDOW *, void (*callback) (void *), void *arg);
 extern int curses_read_char(void);
 extern void curses_toggle_color_attr(WINDOW *win, int color, int attr, int onoff);
 extern void curses_bail(const char *mesg);
@@ -167,7 +175,8 @@ extern void curses_add_nhmenu_item(winid wid, int glyph, const ANY_P *identifier
                                    CHAR_P accelerator, CHAR_P group_accel, int attr,
                                    const char *str, BOOLEAN_P presel);
 extern void curses_finalize_nhmenu(winid wid, const char *prompt);
-extern int curses_display_nhmenu(winid wid, int how, MENU_ITEM_P **_selected);
+extern int curses_display_nhmenu(winid wid, int how, MENU_ITEM_P **_selected,
+                                 boolean avoid_splash_overlap);
 extern boolean curses_menu_exists(winid wid);
 extern void curses_del_menu(winid wid);
 
@@ -190,7 +199,7 @@ extern void curses_init_nhcolors(void);
 extern void curses_choose_character(void);
 extern int curses_character_dialog(const char** choices, const char *prompt);
 extern void curses_init_options(void);
-extern void curses_display_splash_window(void);
+extern int curses_display_splash_window(boolean count_only);
 extern void curses_cleanup(void);
 
 /* cursmesg.c */
@@ -199,7 +208,6 @@ extern void curses_message_win_puts(const char *message, boolean recursed);
 extern int curses_block(boolean require_tab); /* for MSGTYPE=STOP */
 extern int curses_more(void);
 extern void curses_clear_unhighlight_message_window(void);
-extern void curses_message_win_getline(const char *prompt, char *answer, int buffer);
 extern void curses_last_messages(void);
 extern void curses_init_mesg_history(void);
 extern void curses_prev_mesg(void);

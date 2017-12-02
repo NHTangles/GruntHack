@@ -12,6 +12,20 @@
 
 /* Private declarations */
 
+/* Used to group data together that getlin may need to update on a
+   window resize. */
+struct getlindata {
+    WINDOW *win;
+    const char *prompt;
+    attr_t attr; /* attribute to use for the input line, usually underline */
+    char *input;
+    int pos;
+    int x;
+    int minx;
+    int maxx;
+    int posy;
+};
+
 typedef struct nhmi {
     winid wid;                  /* NetHack window id */
     int glyph;                  /* Menu glyphs */
@@ -53,6 +67,9 @@ typedef enum menu_op_type {
 extern struct menucoloring *menu_colorings;
 #endif
 
+static void reset_getlin(void *vgldat);
+static void do_getlin(const char *prompt, char *answer, int buffer,
+                      boolean extcmd);
 static nhmenu *get_menu(winid wid);
 static char menu_get_accel(boolean first);
 static void menu_determine_pages(nhmenu *menu);
@@ -69,115 +86,254 @@ static int menu_max_height(void);
 
 static nhmenu *nhmenus = NULL;  /* NetHack menu array */
 
+/* Writes the input to a getlin buffer. */
+static void
+print_getlin_input(struct getlindata *gldat)
+{
+    wmove(gldat->win, gldat->posy, gldat->minx);
+    wattron(gldat->win, gldat->attr);
+
+    /* Print all the visible input */
+    int i;
+    for (i = (gldat->pos - gldat->x);
+         (i - gldat->pos + gldat->x + gldat->minx) < gldat->maxx; i++) {
+        if (gldat->input[i])
+            waddch(gldat->win, gldat->input[i]);
+        else /* we're past the end of the string */
+            waddch(gldat->win, ' ');
+    }
+
+    /* Done with outputting current input. Position the cursor and
+       query for the next input. */
+    wattroff(gldat->win, gldat->attr);
+    wmove(gldat->win, gldat->posy, gldat->x + gldat->minx);
+}
+
+/* Performs window initialization, or reinitialization (if it was resized) */
+static void
+reset_getlin(void *vgldat)
+{
+    struct getlindata *gldat = vgldat;
+    int height, width, winx, winy;
+    WINDOW *bwin; /* will only exist briefly to paint a border. */
+    WINDOW *msgwin = curses_get_nhwin(MESSAGE_WIN);
+    int prompt_height = 1;
+    int prompt_width = strlen(gldat->prompt);
+
+    gldat->attr = A_UNDERLINE;
+
+    if (iflags.window_inited && !iflags.wc_popup_dialog) {
+        /* Using the message window. */
+        curses_get_window_size(MESSAGE_WIN, &height, &width);
+        if (!curses_window_has_border(MESSAGE_WIN))
+            width--; /* We only care about the right, not the left, border. */
+
+        pline("%s", gldat->prompt);
+        waddch(msgwin, ' ');
+        wrefresh(msgwin);
+        getyx(msgwin, winy, winx);
+        gldat->win = msgwin;
+        gldat->attr = A_BOLD;
+        if (height == 1)
+            gldat->attr = 0;
+
+        gldat->minx = winx;
+        gldat->maxx = width;
+        gldat->posy = winy;
+    } else {
+        /* Using a seperate window. */
+        if (iflags.window_inited) /* height will not be used */
+            curses_get_window_size(MAP_WIN, &height, &width);
+        else
+            width = term_cols;
+
+        width -= 2; /* borders */
+        if (prompt_width + 2 > width)
+            prompt_height = curses_num_lines(gldat->prompt, width);
+
+        height = prompt_height;
+        height++; /* Fit the input line */
+
+        /* Border window */
+        bwin = curses_create_window(width, height,
+                                    iflags.window_inited ? UP : CENTER);
+        wrefresh(bwin);
+        getbegyx(bwin, winy, winx);
+        werase(bwin);
+        delwin(bwin);
+
+        /* create the input window (or move, if it already existed) */
+        if (!gldat->win)
+            gldat->win = newwin(height, width, winy + 1, winx + 1);
+        else {
+            werase(gldat->win);
+            wresize(gldat->win, height, width);
+            mvwin(gldat->win, winy + 1, winx + 1);
+        }
+
+        if (prompt_width + 2 > width) {
+            int i;
+            char *tmpstr;
+            for (i = 0; i < prompt_height; i++) {
+                tmpstr = curses_break_str(gldat->prompt, width, i + 1);
+                mvwaddstr(gldat->win, i, 1, tmpstr);
+                free(tmpstr);
+            }
+        } else
+            mvwaddstr(gldat->win, 0, 1, gldat->prompt);
+
+        gldat->minx = 1;
+        gldat->maxx = (width - 1);
+        gldat->posy = prompt_height;
+    }
+
+    while (gldat->x > (gldat->maxx - gldat->minx)) {
+        gldat->x--;
+        gldat->pos--;
+    }
+
+    print_getlin_input(gldat);
+}
 
 /* Get a line of text from the player, such as asking for a character name or a wish */
-
 void
 curses_line_input_dialog(const char *prompt, char *answer, int buffer)
 {
-    int map_height, map_width, remaining_buf, winx, winy, count;
-    WINDOW *askwin, *bwin;
-    char input[buffer];
-    char *tmpstr;
-    int prompt_width = strlen(prompt);
-    int prompt_height = 1;
-    int height = prompt_height;
-    int width = term_cols - 2;
+    do_getlin(prompt, answer, buffer, FALSE);
+}
 
-    if (iflags.window_inited) {
-        if (!iflags.wc_popup_dialog)
-            return curses_message_win_getline(prompt, answer, buffer);
-        curses_get_window_size(MAP_WIN, &map_height, &map_width);
-        width = map_width - 2;
-    }
-
-    /* Figure out if we need several lines for the prompt itself. */
-    if (prompt_width + 2 > width)
-        prompt_height = curses_num_lines(prompt, width);
-
-    height = prompt_height;
-    height++; /* Fit the input line. */
-
-    bwin = curses_create_window(width, height,
-                                iflags.window_inited ? UP : CENTER);
-    wrefresh(bwin);
-    getbegyx(bwin, winy, winx);
-    werase(bwin);
-    delwin(bwin);
-    askwin = newwin(height, width, winy + 1, winx + 1);
-
-    if (prompt_width + 2 > width) {
-        for (count = 0; count < prompt_height; count++) {
-            tmpstr = curses_break_str(prompt, width, count + 1);
-            mvwaddstr(askwin, count, 1, tmpstr);
-            free(tmpstr);
-        }
-    } else
-        mvwaddstr(askwin, 0, 1, prompt);
-
-    /* Cursor positioning for the prompt */
-    int x = 1;
-    int y = prompt_height;
-
-    int i; /* Used to print characters on the input line. */
+/* Performs input handling of a line. If extcmd is TRUE, attempt to autocomplete
+   into extended commands. */
+static void
+do_getlin(const char *prompt, char *answer, int buffer, boolean extcmd)
+{
+    int i;
+    struct getlindata gldat = {0};
+    gldat.input = calloc(buffer, sizeof (buffer));
+    gldat.prompt = prompt;
+    reset_getlin(&gldat);
 
     curs_set(1);
     int answer_ch;
-    int buffer_cnt = 0;
+    int buffer_cnt = 0; /* Length of current input (excludes NULL) */
+
+    /* Extended command autocompletion: autocomplete if we have a single match
+       only. */
+    int extcmd_match = 0;
+    int extcmd_match_total = 0;
     while (1) {
         /* First, print out what we have at the moment on the input line. */
-        x = 1;
-        wmove(askwin, y, x);
-        wattron(askwin, A_UNDERLINE);
-        i = 0;
-        /* Maybe the input wont fit. In that case, skip characters until it
-           does. +2 because we also want to be able to fit the cursor for
-           further input in the end, too. */
-        if (i < (buffer_cnt - width + 2))
-            i = (buffer_cnt - width + 2);
+        print_getlin_input(&gldat);
 
-        /* Now do the existing input */
-        for (; i < buffer_cnt; i++) {
-            waddch(askwin, input[i]);
-            x++;
-        }
+        /* Now we can do the actual poll for input and process it. */
+        answer_ch = curses_getch(gldat.win, reset_getlin, &gldat);
 
-        /* If we still have room for more, fill the rest of the line with
-           blank space. */
-        for (i = x; i < (width - 1); i++)
-            waddch(askwin, ' ');
-
-        /* Done with outputting current input. Position the cursor and
-           query for the next input. */
-        wattroff(askwin, A_UNDERLINE);
-        wmove(askwin, y, x);
-
-        answer_ch = wgetch(askwin);
+        /* See if user is done, or is escaping first. */
         if (answer_ch == KEY_ESCAPE) {
-            input[0] = '\0';
+            /* user escaped, so abort everything. */
+            gldat.input[0] = '\0';
+            break;
+        } else if (answer_ch == '\r' || answer_ch == '\n' ||
+                   answer_ch == '\0')
+            break;
+
+        switch (answer_ch) {
+        case KEY_HOME:
+            gldat.pos = 0;
+            gldat.x = 0;
+            break;
+        case KEY_END:
+            gldat.x += (buffer_cnt - gldat.pos);
+            if (gldat.x > (gldat.maxx - gldat.minx))
+                gldat.x = (gldat.maxx - gldat.minx);
+            gldat.pos = buffer_cnt;
+            break;
+        case KEY_DC: /* Delete */
+            if (gldat.pos == buffer_cnt)
+                break;
+
+            /* Delete is equal to right + backspace */
+            gldat.pos++;
+            gldat.x++;
+
+            /* fallthrough */
+        case KEY_BACKSPACE:
+        case 8:
+            /* Is this a valid action? cursor_pos==0 means we're
+               at the beginning. */
+            if (!gldat.pos)
+                break;
+
+            /* Remove a character, and potentially shift stuff
+               after it back. */
+            for (i = (gldat.pos - 1); i < buffer_cnt; i++)
+                gldat.input[i] = gldat.input[i+1];
+
+            buffer_cnt--;
+            gldat.input[buffer_cnt] = '\0';
+            /* fallthrough */
+        case KEY_LEFT:
+            if (gldat.pos) {
+                gldat.pos--;
+                if (gldat.x)
+                    gldat.x--;
+            }
+            break;
+        default:
+            /* Character input is valid only for printable
+               characters and if our buffer isn't filled.
+               -1 since we also need to include the null
+               terminator. */
+            if (buffer_cnt == (buffer - 1) ||
+                answer_ch >= 128 || answer_ch < ' ')
+                break;
+
+            /* Add the character at our input at the position
+               we are at.  This might shift other characters. */
+            for (i = buffer_cnt; i > gldat.pos; i--)
+                gldat.input[i] = gldat.input[i-1];
+
+            gldat.input[gldat.pos] = answer_ch;
+            buffer_cnt++;
+
+            /* If we are handling an extended command, maybe try to
+               autocomplete it. */
+            extcmd_match_total = 0;
+            if (extcmd) {
+                for (i = 0; extcmdlist[i].ef_txt; i++) {
+                    if (!strncmpi(gldat.input, extcmdlist[i].ef_txt,
+                                  gldat.pos + 1)) {
+                        extcmd_match = i;
+                        extcmd_match_total++;
+                    }
+                }
+
+                /* Autocomplete if we have a single match */
+                if (extcmd_match_total == 1) {
+                    strcpy(gldat.input, extcmdlist[extcmd_match].ef_txt);
+                    buffer_cnt = strlen(gldat.input);
+                }
+            }
+            /* fallthrough */
+        case KEY_RIGHT:
+            if (gldat.pos < buffer_cnt) {
+                gldat.pos++;
+                if (gldat.x < (gldat.maxx - gldat.minx))
+                    gldat.x++;
+            }
             break;
         }
-
-        if (answer_ch == '\r' || answer_ch == '\n' ||
-            answer_ch == KEY_ESCAPE || answer_ch == '\0')
-            answer_ch = '\0';
-
-        if (answer_ch >= 256 || buffer_cnt == buffer)
-            continue;
-
-        input[buffer_cnt] = answer_ch;
-        buffer_cnt++;
-        if (!answer_ch)
-            break;
     }
     curs_set(0);
-    strcpy(answer, input);
-    curses_destroy_win(askwin);
+    strcpy(answer, gldat.input);
+    free(gldat.input);
+    if (!iflags.window_inited || gldat.win != curses_get_nhwin(MESSAGE_WIN))
+        curses_destroy_win(gldat.win);
+    else
+        curses_clear_unhighlight_message_window();
 }
 
-
 /* Get a single character response from the player, such as a y/n prompt */
-
 int
 curses_character_input_dialog(const char *prompt, const char *choices,
                               CHAR_P def)
@@ -342,122 +498,25 @@ curses_character_input_dialog(const char *prompt, const char *choices,
 int
 curses_ext_cmd()
 {
-    int count, letter, prompt_width, startx, starty, winx, winy;
-    int messageh, messagew, maxlen = BUFSZ - 1;
-    int ret = -1;
-    char cur_choice[BUFSZ];
-    int matches = 0;
-    WINDOW *extwin = NULL, *extwin2 = NULL;
-
-    if (iflags.extmenu) {
+    if (iflags.extmenu)
         return extcmd_via_menu();
-    }
-    
-    startx = 0;
-    starty = 0;
-    if (iflags.wc_popup_dialog) { /* Prompt in popup window */
-        int x0, y0, w, h; /* bounding coords of popup */
-        extwin2 = curses_create_window(25, 1, UP);
-        wrefresh(extwin2);
-        /* create window inside window to prevent overwriting of border */
-        getbegyx(extwin2,y0,x0);
-        getmaxyx(extwin2,h,w);
-        extwin = newwin(1, w-2, y0+1, x0+1);
-        if (w - 4 < maxlen) maxlen = w - 4;
-    } else {
-        curses_get_window_xy(MESSAGE_WIN, &winx, &winy);
-        curses_get_window_size(MESSAGE_WIN, &messageh, &messagew);
 
-        if (curses_window_has_border(MESSAGE_WIN)) {
-            winx++;
-            winy++;
-        }
+    const char *prompt = "extended command: (? for help)";
+    if (!iflags.wc_popup_dialog)
+        prompt = "#"; /* Mimic the tty windowport here */
 
-        winy += messageh - 1;
-        extwin = newwin(1, messagew-2, winy, winx);
-        if (messagew - 4 < maxlen) maxlen = messagew - 4;
-        pline("#");
-    }
+    char input[BUFSZ];
+    do_getlin(prompt, input, BUFSZ, TRUE);
+    if (!*input)
+        return -1; /* escaped */
 
-    cur_choice[0] = '\0';
+    int i;
+    for (i = 0; extcmdlist[i].ef_txt; i++)
+        if (!strcmpi(input, extcmdlist[i].ef_txt))
+            return i;
 
-    while (1) {
-        wmove(extwin, starty, startx);
-        waddstr(extwin, "# ");
-        wmove(extwin, starty, startx + 2);
-        waddstr(extwin, cur_choice);
-        wmove(extwin, starty, strlen(cur_choice) + startx + 2);
-        wprintw(extwin, "             ");
-
-        /* if we have an autocomplete command, AND it matches uniquely */
-        if (matches == 1) {
-            curses_toggle_color_attr(extwin, NONE, A_UNDERLINE, ON);
-            wmove(extwin, starty, strlen(cur_choice) + startx + 2);
-            wprintw(extwin, "%s", extcmdlist[ret].ef_txt + strlen(cur_choice));
-            curses_toggle_color_attr(extwin, NONE, A_UNDERLINE, OFF);
-            mvwprintw(extwin, starty,
-                      strlen(extcmdlist[ret].ef_txt) + 2, "          ");
-        }
-
-        wrefresh(extwin);
-        letter = wgetch(extwin);
-        prompt_width = strlen(cur_choice);
-        matches = 0;
-
-        if (letter == DOESCAPE || letter == ERR) {
-            ret = -1;
-            break;
-        }
-
-        if ((letter == '\r') || (letter == '\n')) {
-            if (ret == -1) {
-                for (count = 0; extcmdlist[count].ef_txt; count++) {
-                    if (!strcasecmp(cur_choice, extcmdlist[count].ef_txt)) {
-                        ret = count;
-                        break;
-                    }
-                }
-            }
-            break;
-        }
-
-        if ((letter == '\b') || (letter == KEY_BACKSPACE)) {
-            if (prompt_width == 0) {
-                ret = -1;
-                break;
-            } else {
-                cur_choice[prompt_width - 1] = '\0';
-                letter = '*';
-                prompt_width--;
-            }
-        }
-        if (letter != '*' && prompt_width < maxlen) {
-            cur_choice[prompt_width] = letter;
-            cur_choice[prompt_width + 1] = '\0';
-            ret = -1;
-        }
-        for (count = 0; extcmdlist[count].ef_txt; count++) {
-            if (!extcmdlist[count].autocomplete)
-                continue;
-            if (strlen(extcmdlist[count].ef_txt) > prompt_width) {
-                if (strncasecmp(cur_choice, extcmdlist[count].ef_txt,
-                                prompt_width) == 0) {
-                    if ((extcmdlist[count].ef_txt[prompt_width] ==
-                         lowc(letter)) || letter == '*') {
-                        if (matches == 0) {
-                            ret = count;
-                        }
-
-                        matches++;
-                    }
-                }
-            }
-        }
-    }
-
-    curses_destroy_win(extwin);
-    if (extwin2) curses_destroy_win(extwin2);
-    return ret;
+    pline("Unknown extended command: %s", input);
+    return -1;
 }
 
 
@@ -597,7 +656,8 @@ curses_finalize_nhmenu(winid wid, const char *prompt)
 /* Display a nethack menu, and return a selection, if applicable */
 
 int
-curses_display_nhmenu(winid wid, int how, MENU_ITEM_P ** _selected)
+curses_display_nhmenu(winid wid, int how, MENU_ITEM_P ** _selected,
+                      boolean avoid_splash_overlap)
 {
     nhmenu *current_menu = get_menu(wid);
     nhmenu_item *menu_item_ptr;
@@ -627,15 +687,17 @@ curses_display_nhmenu(winid wid, int how, MENU_ITEM_P ** _selected)
     menu_win_size(current_menu);
     menu_determine_pages(current_menu);
 
-    /* Display pre and post-game menus centered */
-    if (((moves <= 1) && !invent) || program_state.gameover) {
+    /* Display some pre-game menus below a potential splash screen */
+    if (avoid_splash_overlap)
+        win = curses_create_window(current_menu->width,
+                                   current_menu->height, -1);
+    /* Display (other) pre and post-game menus centered */
+    else if (program_state.gameover)
         win = curses_create_window(current_menu->width,
                                    current_menu->height, CENTER);
-    } else { /* Display during-game menus on the right out of the way */
-
+    else /* Display during-game menus on the right out of the way */
         win = curses_create_window(current_menu->width,
                                    current_menu->height, RIGHT);
-    }
 
     num_chosen = menu_get_selections(win, current_menu, how);
     curses_destroy_win(win);
