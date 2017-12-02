@@ -24,6 +24,10 @@
 #	'SysBe'		-- BeOS
 SYSTEM = Sysunix
 
+#Game's view of where HACKDIR is
+DIR = /opt/games/lib/grunthackdir
+#This is the game's VAR_PLAYGROUND 
+VAR = $(DIR)
 #
 # Make sure that your bourne shell is specified here, as you have to spawn
 # some of the commands (eg. depend) in bourne shell for them to work.
@@ -162,13 +166,29 @@ GNOMEINC=-I/usr/lib/glib/include -I/usr/lib/gnome-libs/include -I../win/gnome
 # flags for debugging:
 # CFLAGS = -g -I../include
 
-CFLAGS = -g -DLINUX -O -I../include
+CFLAGS = -g -O -I../include 
+CFLAGS += -DWIZARD=\"wizard\"
+#CFLAGS += -DLINUX
+
+# Extra CFLAGS required for UNCURSED rendering library (used with curses windowport)
+CFLAGS += -DDUMBMAKE
+CFLAGS += -DAIMAKE_BUILDOS_linux
+CFLAGS += -include ../dumbmake.h
+CFLAGS += -I../libuncursed/include
+# 
+
 LFLAGS = 
+
+# extra CFLAGS for paths
+CFLAGS += -DHACKDIR=\"$(DIR)\" -DVAR_PLAYGROUND=\"$(VAR)\"
 
 # The Qt and Be window systems are written in C++, while the rest of
 # NetHack is standard C.  If using Qt, uncomment the LINK line here to get
 # the C++ libraries linked in.
-CXXFLAGS = $(CFLAGS) -I. -I$(QTDIR)/include
+#CXXFLAGS = $(CFLAGS) -I. -I$(QTDIR)/include
+
+# UNCURSED also requires C++ for static linking of plugins
+CXXFLAGS = -g
 CXX=g++
 #LINK=g++
 #	For cross-compiling, eg. with gcc on Linux (see also CC further up):
@@ -192,6 +212,11 @@ WINCURSESSRC = ../win/curses/cursmain.c ../win/curses/curswins.c \
 	../win/curses/cursmesg.c ../win/curses/cursinvt.c
 WINCURSESOBJ = cursmain.o curswins.o cursmisc.o cursdial.o cursstat.o \
 	cursinit.o cursmesg.o cursinvt.o
+# This is required if we want to use libuncursed (from NetHack4) for the
+# curses windowport, instead of linking to ncurses.
+UNCURSEDSRC = ../libuncursed/src/libuncursed.c ../libuncursed/src/plugins.c \
+	../libuncursed/src/plugins/tty.c ../libuncursed/src/plugins/tty.cxx
+UNCURSEDOBJ = libuncursed.o plugins.o tty.o wrap_tty.o
 #
 # files for an X11 port
 # (tile.c is a generated source file)
@@ -233,8 +258,8 @@ WINBEOBJ =
 
 #
 #
-WINSRC = $(WINTTYSRC) $(WINCURSESSRC)
-WINOBJ = $(WINTTYOBJ) $(WINCURSESOBJ)
+WINSRC = $(WINTTYSRC) $(WINCURSESSRC) $(UNCURSEDSRC)
+WINOBJ = $(WINTTYOBJ) $(WINCURSESOBJ) $(UNCURSEDOBJ)
 
 # on some systems the termcap library is in -ltermcap or -lcurses
 # on 386 Xenix, the -ltermlib tputs() seems not to work; use -lcurses instead
@@ -254,7 +279,9 @@ WINTTYLIB = -lncurses
 #
 # libraries for curses port
 # link with ncurses
-WINCURSESLIB = -lncurses
+# WINCURSESLIB = -lncurses
+# This is required for uncursed
+WINCURSESLIB = -ldl
 # link with pdcurses for SDL, installed in a separate directory
 #WINCURSESLIB = -L/usr/local/lib -lpdcurses $(shell sdl-config --libs)
 # same as above, for XCurses
@@ -649,12 +676,20 @@ cursstat.o: ../win/curses/cursstat.c $(HACK_H) ../include/wincurs.h \
 cursinit.o: ../win/curses/cursinit.c $(HACK_H) ../include/wincurs.h \
 		../win/curses/cursinit.h
 	$(CC) $(CFLAGS) -c ../win/curses/cursinit.c
-cursmesg.o: ../win/curses/cursmesg.c $(HACK_H) ../include/wincurs.h \
-		../win/curses/cursmesg.h
-	$(CC) $(CFLAGS) -c ../win/curses/cursmesg.c
 cursinvt.o: ../win/curses/cursinvt.c $(HACK_H) ../include/wincurs.h \
 		../win/curses/cursinvt.h
 	$(CC) $(CFLAGS) -c ../win/curses/cursinvt.c
+cursmesg.o: ../win/curses/cursmesg.c $(HACK_H) ../include/wincurs.h \
+		../win/curses/cursmesg.h
+	$(CC) $(CFLAGS) -c ../win/curses/cursmesg.c
+libuncursed.o: ../libuncursed/src/libuncursed.c
+	$(CC) $(CFLAGS) -c ../libuncursed/src/libuncursed.c
+plugins.o: ../libuncursed/src/plugins.c
+	$(CC) $(CFLAGS) -c ../libuncursed/src/plugins.c
+tty.o: ../libuncursed/src/plugins/tty.c
+	$(CC) $(CFLAGS) -c ../libuncursed/src/plugins/tty.c
+wrap_tty.o: ../libuncursed/src/plugins/tty.c
+	$(CXX) $(CFLAGS) -c ../libuncursed/src/plugins/tty.cxx -o wrap_tty.o
 Window.o: ../win/X11/Window.c ../include/xwindowp.h ../include/xwindow.h \
 		$(CONFIG_H)
 	$(CC) $(CFLAGS) -c ../win/X11/Window.c
