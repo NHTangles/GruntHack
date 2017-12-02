@@ -19,7 +19,6 @@ boolean counting;   /* Count window is active */
 #define OFF 0
 #define ON 1
 #define NONE -1
-#define KEY_ESC 0x1b
 #define DIALOG_BORDER_COLOR CLR_MAGENTA
 #define ALERT_BORDER_COLOR CLR_RED
 #define SCROLLBAR_COLOR CLR_MAGENTA

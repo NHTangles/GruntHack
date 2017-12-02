@@ -86,7 +86,7 @@ static int menu_max_height(void);
 
 static nhmenu *nhmenus = NULL;  /* NetHack menu array */
 
-/* Writes the input to a getlin buffer. */
+/* Writes the input of a getlin buffer to its window. */
 static void
 print_getlin_input(struct getlindata *gldat)
 {
@@ -103,8 +103,8 @@ print_getlin_input(struct getlindata *gldat)
             waddch(gldat->win, ' ');
     }
 
-    /* Done with outputting current input. Position the cursor and
-       query for the next input. */
+    /* Done with outputting current input. Position the cursor to prepare
+       for the next input. */
     wattroff(gldat->win, gldat->attr);
     wmove(gldat->win, gldat->posy, gldat->x + gldat->minx);
 }
@@ -195,7 +195,8 @@ reset_getlin(void *vgldat)
     print_getlin_input(gldat);
 }
 
-/* Get a line of text from the player, such as asking for a character name or a wish */
+/* Get a line of text from the player, such as asking for a character name
+   or a wish */
 void
 curses_line_input_dialog(const char *prompt, char *answer, int buffer)
 {
@@ -425,7 +426,7 @@ curses_character_input_dialog(const char *prompt, const char *choices,
 
         answer = curses_convert_keys(answer);
 
-        if (answer == KEY_ESC) {
+        if (answer == KEY_ESCAPE) {
             if (choices == NULL) {
                 break;
             }
@@ -1183,7 +1184,7 @@ menu_get_selections(WINDOW * win, nhmenu *menu, int how)
         switch (how) {
         case PICK_NONE:
             if (menu->num_pages == 1) {
-                if (curletter == KEY_ESC) {
+                if (curletter == KEY_ESCAPE) {
                     num_selected = -1;
                 } else {
                     num_selected = 0;
@@ -1226,7 +1227,7 @@ menu_get_selections(WINDOW * win, nhmenu *menu, int how)
         }
 
         switch (curletter) {
-        case KEY_ESC:
+        case KEY_ESCAPE:
             num_selected = -1;
             dismiss = TRUE;
             break;
