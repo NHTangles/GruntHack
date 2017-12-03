@@ -322,6 +322,9 @@ curses_del_nhwin(winid wid)
         panic("curses_del_nhwin: wid out of range. Not a main window.");
     }
 
+    if (nhwins[wid].curwin)
+        delwin(nhwins[wid].curwin);
+
     nhwins[wid].curwin = NULL;
     nhwins[wid].nhwin = -1;
 }
