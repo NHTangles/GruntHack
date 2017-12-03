@@ -107,6 +107,17 @@ curses_create_window(int width, int height, orient orientation)
             startx = 0;
         starty = term_rows - height;
         break;
+    case INV_RIGHT:
+        if (curses_get_nhwin(INV_WIN)) {
+            curses_get_window_xy(INV_WIN, &mapx, &mapy);
+            curses_get_window_size(INV_WIN, &maph, &mapw);
+            startx = mapx + mapw - width;
+            if (curses_window_has_border(INV_WIN))
+                startx += 2;
+            starty = 0;
+            break;
+        }
+        /* fallthrough */
     case RIGHT:
         if (invent || (moves > 1)) {
             startx = (mapw + mapx + (mapb_offset * 2)) - width;
@@ -116,7 +127,7 @@ curses_create_window(int width, int height, orient orientation)
 
         starty = 0;
         break;
-    case -1:
+    case BELOW_SPLASH:
         /* centered below the splash screen */
         startx = (term_cols / 2) - (width / 2);
         starty = (term_rows / 2) - (height / 2);
@@ -124,11 +135,11 @@ curses_create_window(int width, int height, orient orientation)
         int splash_size = curses_display_splash_window(TRUE);
         splash_size++; /* add a small spacing */
         while (starty < splash_size &&
-               ((starty + height + 2) < term_rows))
+               ((starty + height) < term_rows))
             starty++;
         break;
     default:
-        panic("curses_create_window: Bad orientation");
+        panic("curses_create_window: Bad orientation: %d", orientation);
         break;
     }
 

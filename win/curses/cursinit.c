@@ -977,7 +977,7 @@ curses_character_selection(void)
         any_invalid = 0;
 
         /* Create the window border as its seperate window */
-        bwin = curses_create_window(width, height, -1);
+        bwin = curses_create_window(width, height, BELOW_SPLASH);
         wrefresh(bwin);
         getbegyx(bwin, winy, winx);
         werase(bwin);

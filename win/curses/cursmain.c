@@ -175,25 +175,15 @@ curses_player_selection()
 void
 curses_askname()
 {
-    curses_line_input_dialog("Who are you?", plname, PL_NSIZ);
+    curses_line_input_dialog("Who are you?", plname, PL_NSIZ, NULL, NULL);
 }
 
 
 /* Does window event processing (e.g. exposure events).
-   A noop for the tty and X window-ports.
-*/
+   A noop for the tty and X window-ports. */
 void
 curses_get_nh_event()
 {
-#ifdef PDCURSES
-    if (is_termresized()) {
-        resize_term(0, 0);
-        getmaxyx(base_term, term_rows, term_cols);
-        curses_create_main_windows();
-        curses_last_messages();
-        doredraw();
-    }
-#else
     int old_term_rows = term_rows;
     int old_term_cols = term_cols;
     getmaxyx(base_term, term_rows, term_cols);
@@ -203,12 +193,10 @@ curses_get_nh_event()
     curses_create_main_windows();
     curses_last_messages();
     doredraw();
-#endif
 }
 
-/* Exits the window system.  This should dismiss all windows,
-   except the "window" used for raw_print().  str is printed if possible.
-*/
+/* Exits the window system.  This should dismiss all windows except the
+   "window" used for raw_print().  str is printed if possible. */
 void
 curses_exit_nhwindows(const char *str)
 {
@@ -721,7 +709,7 @@ getlin(const char *ques, char *input)
 void
 curses_getlin(const char *question, char *input)
 {
-    curses_line_input_dialog(question, input, BUFSZ);
+    curses_line_input_dialog(question, input, BUFSZ, NULL, NULL);
 }
 
 /*

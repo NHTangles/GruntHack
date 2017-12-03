@@ -24,6 +24,11 @@ struct getlindata {
     int minx;
     int maxx;
     int posy;
+
+    /* Used if getlin is called as a subwindow (menulist can do this), to
+       be called on resizing before getlin's own resize code runs. */
+    void (*callback) (void *);
+    void *arg;
 };
 
 typedef struct nhmi {
@@ -69,7 +74,7 @@ extern struct menucoloring *menu_colorings;
 
 static void reset_getlin(void *vgldat);
 static void do_getlin(const char *prompt, char *answer, int buffer,
-                      boolean extcmd);
+                      boolean extcmd, void (*callback) (void *), void *arg);
 static nhmenu *get_menu(winid wid);
 static char menu_get_accel(boolean first);
 static void menu_determine_pages(nhmenu *menu);
@@ -114,6 +119,12 @@ static void
 reset_getlin(void *vgldat)
 {
     struct getlindata *gldat = vgldat;
+
+    /* Maybe getlin is used as a subwindow? In that case, call the parent's
+       callback function first. */
+    if (gldat->callback)
+        gldat->callback(gldat->arg);
+
     int height, width, winx, winy;
     WINDOW *bwin; /* will only exist briefly to paint a border. */
     WINDOW *msgwin = curses_get_nhwin(MESSAGE_WIN);
@@ -198,15 +209,17 @@ reset_getlin(void *vgldat)
 /* Get a line of text from the player, such as asking for a character name
    or a wish */
 void
-curses_line_input_dialog(const char *prompt, char *answer, int buffer)
+curses_line_input_dialog(const char *prompt, char *answer, int buffer,
+                         void (*callback) (void *), void *arg)
 {
-    do_getlin(prompt, answer, buffer, FALSE);
+    do_getlin(prompt, answer, buffer, FALSE, callback, arg);
 }
 
 /* Performs input handling of a line. If extcmd is TRUE, attempt to autocomplete
    into extended commands. */
 static void
-do_getlin(const char *prompt, char *answer, int buffer, boolean extcmd)
+do_getlin(const char *prompt, char *answer, int buffer, boolean extcmd,
+          void (*callback) (void *), void *arg)
 {
     int i;
     struct getlindata gldat = {0};
@@ -507,7 +520,7 @@ curses_ext_cmd()
         prompt = "#"; /* Mimic the tty windowport here */
 
     char input[BUFSZ];
-    do_getlin(prompt, input, BUFSZ, TRUE);
+    do_getlin(prompt, input, BUFSZ, TRUE, NULL, NULL);
     if (!*input)
         return -1; /* escaped */
 
@@ -609,8 +622,7 @@ curses_add_nhmenu_item(winid wid, int glyph, const ANY_P * identifier,
     new_item->next_item = NULL;
 
     if (current_menu == NULL) {
-        panic
-            ("curses_add_nhmenu_item: attempt to add item to nonexistant menu");
+        panic("curses_add_nhmenu_item: adding item to nonexistant menu?");
     }
 
     current_items = current_menu->entries;
@@ -688,10 +700,15 @@ curses_display_nhmenu(winid wid, int how, MENU_ITEM_P ** _selected,
     menu_win_size(current_menu);
     menu_determine_pages(current_menu);
 
-    /* Display some pre-game menus below a potential splash screen */
-    if (avoid_splash_overlap)
+    /* Inventory window (not sidebar) is wid 20, the first menu winid.
+       Always display it along the sidebar if it exists. */
+    if (wid == 20)
         win = curses_create_window(current_menu->width,
-                                   current_menu->height, -1);
+                                   current_menu->height, INV_RIGHT);
+    /* Display some pre-game menus below a potential splash screen */
+    else if (avoid_splash_overlap)
+        win = curses_create_window(current_menu->width,
+                                   current_menu->height, BELOW_SPLASH);
     /* Display (other) pre and post-game menus centered */
     else if (program_state.gameover)
         win = curses_create_window(current_menu->width,
@@ -928,57 +945,30 @@ menu_determine_pages(nhmenu *menu)
 static void
 menu_win_size(nhmenu *menu)
 {
-    int width, height, maxwidth, maxheight, curentrywidth, lastline;
-    int maxentrywidth = strlen(menu->prompt);
-    int maxheaderwidth = 0;
+    int width, height, curentrywidth, lastline;
     nhmenu_item *menu_item_ptr = menu->entries;
 
-    maxwidth = 38;              /* Reasonable minimum usable width */
-
-    if ((term_cols / 2) > maxwidth) {
-        maxwidth = (term_cols / 2);     /* Half the screen */
-    }
-
-    maxheight = menu_max_height();
+    height = menu_max_height();
 
     /* First, determine the width of the longest menu entry */
-    while (menu_item_ptr != NULL)
-    {
-        if (menu_item_ptr->identifier.a_void == NULL) {
-            curentrywidth = strlen(menu_item_ptr->str);
+    while (menu_item_ptr != NULL) {
+        curentrywidth = strlen(menu_item_ptr->str);
+        if (menu_item_ptr->identifier.a_void)
+            curentrywidth += 4; /* accelerator: " a) " */
+        if (menu_item_ptr->glyph != NO_GLYPH && iflags.use_menu_glyphs)
+            curentrywidth += 2; /* menuglyphs, e.g. "= " for a ring */
 
-            if (curentrywidth > maxheaderwidth) {
-                maxheaderwidth = curentrywidth;
-            }
-        } else {
-            /* Add space for accelerator */
-            curentrywidth=strlen(menu_item_ptr->str) + 4;
-            if (menu_item_ptr->glyph != NO_GLYPH
-                        && iflags.use_menu_glyphs)
-                curentrywidth += 2;
-        }
-        if (curentrywidth > maxentrywidth) {
-            maxentrywidth = curentrywidth;
-        }
+        if (width < curentrywidth)
+            width = curentrywidth;
+
         menu_item_ptr = menu_item_ptr->next_item;
     }
 
-    /* If the widest entry is smaller than maxwidth, reduce maxwidth accordingly */
-    if (maxentrywidth < maxwidth) {
-        maxwidth = maxentrywidth;
-    }
-
-    /* Try not to wrap headers/normal text lines if possible.  We can
-       go wider than half the screen for this purpose if need be */
-
-    if ((maxheaderwidth > maxwidth) && (maxheaderwidth < (term_cols - 2))) {
-        maxwidth = maxheaderwidth;
-    }
-
-    width = maxwidth;
+    if (width > term_cols - 2)
+        width = term_cols - 2;
 
     /* Possibly reduce height if only 1 page */
-    if (!menu_is_multipage(menu, maxwidth, maxheight)) {
+    if (!menu_is_multipage(menu, width, height)) {
         menu_item_ptr = menu->entries;
 
         while (menu_item_ptr->next_item != NULL) {
@@ -987,17 +977,10 @@ menu_win_size(nhmenu *menu)
 
         lastline = (menu_item_ptr->line_num) + menu_item_ptr->num_lines;
 
-        if (lastline < maxheight) {
-            maxheight = lastline;
-        }
-    } else {                    /* If multipage, make sure we have enough width for page footer */
-
-        if (width < 20) {
-            width = 20;
-        }
+        if (lastline < height)
+            height = lastline;
     }
 
-    height = maxheight;
     menu->width = width;
     menu->height = height;
 }
@@ -1270,7 +1253,8 @@ menu_get_selections(WINDOW * win, nhmenu *menu, int how)
             }
             break;
         case MENU_SEARCH:
-            curses_line_input_dialog("Search for:", search_key, BUFSZ);
+            curses_line_input_dialog("Search for:", search_key, BUFSZ,
+                                     NULL, NULL);
 
             wrefresh(win);
 

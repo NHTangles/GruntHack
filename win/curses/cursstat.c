@@ -611,15 +611,10 @@ draw_horizontal_new(int x, int y, int hp, int hpmax)
     if (ACURR(A_STR) > 18 && ACURR(A_STR) < 119)
         str_length = 9;
 
-    getmaxyx(win, y, x);
-
-    /* We want to deal with top line of y. getmaxx would do what we want, but it only
-       exist for compatibility reasons and might not exist at all in some versions. */
-    y = 0;
-    if (curses_window_has_border(STATUS_WIN)) {
+    y -= 2;
+    x = getmaxx(win);
+    if (curses_window_has_border(STATUS_WIN))
         x--;
-        y++;
-    }
 
     x -= stat_length;
     int orig_x = x;
@@ -683,7 +678,7 @@ draw_vertical(int x, int y, int hp, int hpmax)
     y++; /* Blank line inbetween */
     wmove(win, y++, x);
 
-    /* Attributes. Old  vertical order is preserved */
+    /* Attributes. Old vertical order is preserved */
     print_statdiff("Strength:      ", &prevstr, ACURR(A_STR), STAT_STR);
     wmove(win, y++, x);
     print_statdiff("Intelligence:  ", &prevint, ACURR(A_INT), STAT_OTHER);

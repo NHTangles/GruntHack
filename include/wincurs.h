@@ -52,6 +52,8 @@ typedef enum orient_type {
     DOWN,
     RIGHT,
     LEFT,
+    INV_RIGHT,
+    BELOW_SPLASH,
     UNDEFINED
 } orient;
 
@@ -163,7 +165,9 @@ extern int curses_get_mouse(int *mousex, int *mousey, int *mod);
 
 /* cursdial.c */
 
-extern void curses_line_input_dialog(const char *prompt, char *answer, int buffer);
+extern void curses_line_input_dialog(const char *prompt, char *answer,
+                                     int buffer, void (*callback) (void *),
+                                     void *arg);
 extern int curses_character_input_dialog(const char *prompt, const char *choices, CHAR_P def);
 extern int curses_ext_cmd(void);
 extern void curses_create_nhmenu(winid wid);
