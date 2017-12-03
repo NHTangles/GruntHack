@@ -314,13 +314,22 @@ do_getlin(const char *prompt, char *answer, int buffer, boolean extcmd,
                autocomplete it. */
             extcmd_match_total = 0;
             if (extcmd) {
-                for (i = 0; extcmdlist[i].ef_txt; i++) {
-                    if (!strncmpi(gldat.input, extcmdlist[i].ef_txt,
-                                  gldat.pos + 1)) {
-                        extcmd_match = i;
-                        extcmd_match_total++;
+                int pass = 0;
+                do {
+                    pass++;
+                    for (i = 0; extcmdlist[i].ef_txt; i++) {
+                        if (!extcmdlist[i].autocomplete &&
+                            pass == 1)
+                            continue;
+
+                        if (!strncmpi(gldat.input,
+                                      extcmdlist[i].ef_txt,
+                                      gldat.pos + 1)) {
+                            extcmd_match = i;
+                            extcmd_match_total++;
+                        }
                     }
-                }
+                } while (pass < 2 && !extcmd_match_total);
 
                 /* Autocomplete if we have a single match */
                 if (extcmd_match_total == 1) {
