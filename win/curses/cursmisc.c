@@ -592,7 +592,8 @@ curses_posthousekeeping()
 {
     curs_set(0);
     curses_decrement_highlights(FALSE);
-    curses_clear_unhighlight_message_window();
+    if (!curses_get_nhwin(COUNT_WIN))
+        curses_clear_unhighlight_message_window();
 }
 
 

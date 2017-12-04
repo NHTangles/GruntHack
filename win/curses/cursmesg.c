@@ -327,18 +327,26 @@ curses_count_window(const char *count_text)
         curses_set_nhwin(COUNT_WIN, win);
     } else {
         /* Display count at bottom of message window */
-        if (!win) /* scroll the message window appropriately */
-            pline("cnt");
+        if (!win)
+            pline(" "); /* This goes unused. */
         curses_set_nhwin(COUNT_WIN, msgwin);
         win = msgwin;
-        getyx(win, winx, winy);
-        startx = 0;
+        waddch(win, ' ');
+        wrefresh(win);
+        getyx(win, winy, winx);
+        winx = 0;
         if (curses_window_has_border(MESSAGE_WIN))
-            startx++;
+            winx++;
+
+        startx = winx;
         starty = winy;
     }
 
+    if (win == msgwin)
+        wattron(win, A_BOLD);
     mvwprintw(win, starty, startx, "%s", count_text);
+    if (win == msgwin)
+        wattroff(win, A_BOLD);
     wrefresh(win);
 }
 
