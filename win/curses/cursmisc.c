@@ -32,6 +32,24 @@ static int parse_escape_sequence(void);
 #endif
 
 
+/* Handles redrawing of all windows. */
+void
+curses_redraw(void (*callback) (void *), void *arg)
+{
+    /* Redraw windows in general. This will update term_rows/cols */
+    curses_create_main_windows();
+    curses_last_messages();
+    doredraw();
+
+    /* Potentially call our callback */
+    if (callback)
+        (*callback) (arg);
+
+    /* Potentially update/move the count window */
+    if (curses_get_nhwin(COUNT_WIN))
+        curses_reset_count_window();
+}
+
 /* Returns a character of input from the user. Performs resize handling
    if needed. If win is non-NULL, use wgetch (which will refresh that
    window). Otherwise, use the libuncursed-specific timeout_get_wch,
@@ -54,16 +72,8 @@ curses_getch(WINDOW *win, void (*callback) (void *), void *arg)
             int old_term_rows = term_rows;
             int old_term_cols = term_cols;
             getmaxyx(base_term, term_rows, term_cols);
-            if (term_rows != old_term_rows || term_cols != old_term_cols) {
-                /* Redraw windows in general. This will update term_rows/cols */
-                curses_create_main_windows();
-                curses_last_messages();
-                doredraw();
-
-                /* Potentially call our callback */
-                if (callback)
-                    (*callback) (arg);
-            }
+            if (term_rows != old_term_rows || term_cols != old_term_cols)
+                curses_redraw(callback, arg);
         } else
             break; /* we got our key */
     }
@@ -114,7 +124,7 @@ curses_read_char()
     }
 #endif
 
-    if (counting && !isdigit(ch)) {     /* Dismiss count window if necissary */
+    if (curses_get_nhwin(COUNT_WIN) && !isdigit(ch)) { /* Dismiss count window if necissary */
         curses_count_window(NULL);
         curses_refresh_nethack_windows();
     }
@@ -569,6 +579,8 @@ curses_prehousekeeping()
         wmove(win, curs_y, curs_x);
 #endif /* PDCURSES */
         curses_refresh_nhwin(MAP_WIN);
+        if (curses_get_nhwin(COUNT_WIN))
+            curses_reset_count_window();
     }
 }
 
@@ -892,15 +904,13 @@ parse_escape_sequence(void)
 #ifndef PDCURSES
     int ret;
 
-    timeout(10);
-
-    ret = wgetch(curses_get_nhwin(MAP_WIN));
+    ret = curses_getch(NULL, NULL, NULL);
 
     if (ret != ERR) {           /* Likely an escape sequence */
         if (((ret >= 'a') && (ret <= 'z')) || ((ret >= '0') && (ret <= '9'))) {
             ret |= 0x80;        /* Meta key support for most terminals */
         } else if (ret == 'O') {        /* Numeric keypad */
-            ret = wgetch(curses_get_nhwin(MAP_WIN));
+            ret = curses_getch(NULL, NULL, NULL);
             if ((ret != ERR) && (ret >= 112) && (ret <= 121)) {
                 ret = ret - 112 + '0';  /* Convert to number */
             } else {

@@ -376,9 +376,7 @@ curses_update_stats(void)
             ay -= 2;
 
         if (cy != ay) {
-            curses_create_main_windows();
-            curses_last_messages();
-            doredraw();
+            curses_redraw(NULL, NULL);
 
             /* Reset XP highlight (since classic_status and new show different numbers) */
             prevexp.highlight_turns = 0;

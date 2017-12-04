@@ -11,8 +11,6 @@ WINDOW *mapwin, *statuswin, *messagewin;    /* Main windows */
 
 int orig_cursor;	/* Preserve initial cursor state */
 
-boolean counting;   /* Count window is active */
-
 
 #define TEXTCOLOR   /* Allow color */
 #define NHW_END 19
@@ -31,7 +29,8 @@ boolean counting;   /* Count window is active */
 #define STATUS_WIN  2
 #define MAP_WIN     3
 #define INV_WIN     4
-#define NHWIN_MAX   5
+#define COUNT_WIN   5
+#define NHWIN_MAX   6
 #define MESG_HISTORY_MAX   200
 #if !defined(__APPLE__) || !defined(NCURSES_VERSION)
 # define USE_DARKGRAY /* Allow "bright" black; delete if not visible */
@@ -116,6 +115,7 @@ extern void curses_preference_update(const char *pref);
 
 extern WINDOW *curses_create_window(int width, int height, orient orientation);
 extern void curses_destroy_win(WINDOW *win);
+extern void curses_set_nhwin(winid wid, WINDOW *win);
 extern WINDOW *curses_get_nhwin(winid wid);
 extern void curses_add_nhwin(winid wid, int height, int width, int y,
                              int x, orient orientation, boolean border);
@@ -140,6 +140,7 @@ extern boolean curses_map_borders(int *sx, int *sy, int *ex, int *ey,
 
 /* cursmisc.c */
 
+extern void curses_redraw(void (*callback) (void *), void *arg);
 extern int curses_getch(WINDOW *, void (*callback) (void *), void *arg);
 extern int curses_read_char(void);
 extern void curses_toggle_color_attr(WINDOW *win, int color, int attr, int onoff);

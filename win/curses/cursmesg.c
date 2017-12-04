@@ -274,65 +274,72 @@ curses_prev_mesg()
     curses_select_menu(wid, PICK_NONE, &selected);
 }
 
+/* Repositions the count window according to current size, if
+   it's its seperate window (not if it's inline in the msgwin). */
+void
+curses_reset_count_window(void)
+{
+    WINDOW *win = curses_get_nhwin(COUNT_WIN);
+    WINDOW *msgwin = curses_get_nhwin(MESSAGE_WIN);
+    WINDOW *newwin;
+    if (!win || win == msgwin)
+        return;
+
+    newwin = curses_create_window(25, 1, UP);
+    overwrite(win, newwin);
+    delwin(win);
+    curses_set_nhwin(COUNT_WIN, newwin);
+    curs_set(0);
+    wrefresh(newwin);
+}
 
 /* Shows Count: in a separate window, or at the bottom of the message
-window, depending on the user's settings */
-
+   window, depending on the user's settings */
 void
 curses_count_window(const char *count_text)
 {
     int startx, starty, winx, winy;
     int messageh, messagew;
-    static WINDOW *countwin = NULL;
+    WINDOW *win = curses_get_nhwin(COUNT_WIN);
+    WINDOW *msgwin = curses_get_nhwin(MESSAGE_WIN);
 
-    if ((count_text == NULL) && (countwin != NULL)) {
-        delwin(countwin);
-        countwin = NULL;
-        counting = FALSE;
+    if (win && win != msgwin) {
+        curses_del_nhwin(COUNT_WIN);
+        win = NULL;
+    }
+
+    if (!count_text) {
+        if (win == msgwin) {
+            curses_set_nhwin(COUNT_WIN, NULL);
+            curses_clear_unhighlight_message_window();
+        }
+
         return;
     }
 
-    counting = TRUE;
-
-    if (iflags.wc_popup_dialog) {       /* Display count in popup window */
+    if (iflags.wc_popup_dialog) {
         startx = 1;
         starty = 1;
 
-        if (countwin == NULL) {
-            countwin = curses_create_window(25, 1, UP);
-        }
+        if (win == NULL)
+            win = curses_create_window(25, 1, UP);
 
-    } else {                    /* Display count at bottom of message window */
-
-        curses_get_window_xy(MESSAGE_WIN, &winx, &winy);
-        curses_get_window_size(MESSAGE_WIN, &messageh, &messagew);
-
-        if (curses_window_has_border(MESSAGE_WIN)) {
-            winx++;
-            winy++;
-        }
-
-        winy += messageh - 1;
-
-        if (countwin == NULL) {
-            pline("#");
-#ifndef PDCURSES
-            countwin = newwin(1, 25, winy, winx);
-#endif /* !PDCURSES */
-        }
-#ifdef PDCURSES
-        else {
-            curses_destroy_win(countwin);
-        }
-
-        countwin = newwin(1, 25, winy, winx);
-#endif /* PDCURSES */
+        curses_set_nhwin(COUNT_WIN, win);
+    } else {
+        /* Display count at bottom of message window */
+        if (!win) /* scroll the message window appropriately */
+            pline("cnt");
+        curses_set_nhwin(COUNT_WIN, msgwin);
+        win = msgwin;
+        getyx(win, winx, winy);
         startx = 0;
-        starty = 0;
+        if (curses_window_has_border(MESSAGE_WIN))
+            startx++;
+        starty = winy;
     }
 
-    mvwprintw(countwin, starty, startx, "%s", count_text);
-    wrefresh(countwin);
+    mvwprintw(win, starty, startx, "%s", count_text);
+    wrefresh(win);
 }
 
 

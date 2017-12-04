@@ -17,11 +17,9 @@ curses_update_inv(void)
     if (!win) {
         /* It's not. Re-initialize the main windows if the
            option was enabled. */
-        if (flags.perm_invent) {
-            curses_create_main_windows();
-            curses_last_messages();
-            doredraw();
-        }
+        if (flags.perm_invent)
+            curses_redraw(NULL, NULL);
+
         return;
     }
 

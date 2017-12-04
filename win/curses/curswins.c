@@ -53,8 +53,7 @@ curses_create_window(int width, int height, orient orientation)
     boolean map_border = FALSE;
     int mapb_offset = 0;
 
-    if ((orientation == UP) || (orientation == DOWN) ||
-        (orientation == LEFT) || (orientation == RIGHT)) {
+    if (orientation != CENTER) {
         if (invent || (moves > 1)) {
             map_border = curses_window_has_border(MAP_WIN);
             curses_get_window_xy(MAP_WIN, &mapx, &mapy);
@@ -177,11 +176,13 @@ void
 curses_refresh_nethack_windows()
 {
     WINDOW *status_window, *message_window, *map_window, *inv_window;
+    WINDOW *count_window;
 
     status_window = curses_get_nhwin(STATUS_WIN);
     message_window = curses_get_nhwin(MESSAGE_WIN);
     map_window = curses_get_nhwin(MAP_WIN);
     inv_window = curses_get_nhwin(INV_WIN);
+    count_window = curses_get_nhwin(COUNT_WIN);
 
     if ((moves <= 1) && !invent) {
         /* Main windows not yet displayed; refresh base window instead */
@@ -198,13 +199,22 @@ curses_refresh_nethack_windows()
             touchwin(inv_window);
             wnoutrefresh(inv_window);
         }
+        if (count_window) {
+            touchwin(count_window);
+            wnoutrefresh(count_window);
+        }
         doupdate();
     }
 }
 
+/* Sets curwin to the given window. */
+void
+curses_set_nhwin(winid wid, WINDOW *win)
+{
+    nhwins[wid].curwin = win;
+}
 
 /* Return curses window pointer for given NetHack winid */
-
 WINDOW *
 curses_get_nhwin(winid wid)
 {
@@ -217,7 +227,6 @@ curses_get_nhwin(winid wid)
 
 
 /* Add curses window pointer and window info to list for given NetHack winid */
-
 void
 curses_add_nhwin(winid wid, int height, int width, int y, int x,
                  orient orientation, boolean border)
@@ -560,7 +569,8 @@ curses_alert_main_borders(boolean onoff)
 static boolean
 is_main_window(winid wid)
 {
-    if ((wid == MESSAGE_WIN) || (wid == MAP_WIN) || (wid == STATUS_WIN) || wid == INV_WIN) {
+    if (wid == MESSAGE_WIN || wid == MAP_WIN || wid == STATUS_WIN || wid == INV_WIN ||
+        wid == COUNT_WIN) {
         return TRUE;
     } else {
         return FALSE;

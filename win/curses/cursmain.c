@@ -150,15 +150,12 @@ curses_init_nhwindows(int *argcp, char **argv)
     timeout(-1);
 #endif /* PDCURSES */
     getmaxyx(base_term, term_rows, term_cols);
-    counting = FALSE;
     curses_init_options();
     if ((term_rows < 15) || (term_cols < 40)) {
         panic("Terminal too small.  Must be minumum 40 width and 15 height");
     }
 
-    curses_create_main_windows();
-    curses_init_mesg_history();
-    curses_display_splash_window(FALSE);
+    curses_redraw(NULL, NULL);
 }
 
 /* Do a window-port specific player type selection. If player_selection()
@@ -190,9 +187,7 @@ curses_get_nh_event()
     if (term_rows == old_term_rows && term_cols == old_term_cols)
         return;
 
-    curses_create_main_windows();
-    curses_last_messages();
-    doredraw();
+    curses_redraw(NULL, NULL);
 }
 
 /* Exits the window system.  This should dismiss all windows except the
@@ -473,11 +468,9 @@ curses_update_inventory(void)
     /* Don't do anything if perm_invent is off unless we
        changed the option. */
     if (!flags.perm_invent) {
-        if (curses_get_nhwin(INV_WIN)) {
-            curses_create_main_windows();
-            curses_last_messages();
-            doredraw();
-        }
+        if (curses_get_nhwin(INV_WIN))
+            curses_redraw(NULL, NULL);
+
         return;
     }
 
@@ -793,9 +786,6 @@ void
 curses_preference_update(const char *pref)
 {
     if ((strcmp(pref, "align_status") == 0) ||
-        (strcmp(pref, "align_message") == 0)) {
-        curses_create_main_windows();
-        curses_last_messages();
-        doredraw();
-    }
+        (strcmp(pref, "align_message") == 0))
+        curses_redraw(NULL, NULL);
 }

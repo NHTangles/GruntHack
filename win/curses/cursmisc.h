@@ -5,6 +5,7 @@
 
 /* Global declarations */
 
+void curses_redraw(void (*callback) (void *), void *arg);
 int curses_getch(WINDOW *, void (*callback) (void *), void *arg);
 int curses_read_char(void);
 void curses_toggle_color_attr(WINDOW * win, int color, int attr, int onoff);
