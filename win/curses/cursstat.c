@@ -359,8 +359,6 @@ curses_update_stats(void)
     if ((orient != ALIGN_RIGHT) && (orient != ALIGN_LEFT))
         horiz = TRUE;
 
-    boolean border = curses_window_has_border(STATUS_WIN);
-
     /* Figure out if we have proper window dimensions for horizontal statusbar. */
     if (horiz) {
         /* correct y */
@@ -372,8 +370,6 @@ curses_update_stats(void)
         int ax = 0;
         int ay = 0;
         getmaxyx(win, ay, ax);
-        if (border)
-            ay -= 2;
 
         if (cy != ay) {
             curses_redraw(NULL, NULL);
@@ -390,12 +386,6 @@ curses_update_stats(void)
     int x = 0;
     int y = 0;
 
-    /* Don't start at border position if applicable */
-    if (border) {
-        x++;
-        y++;
-    }
-
     /* Get HP values. */
     int hp = u.uhp;
     int hpmax = u.uhpmax;
@@ -408,9 +398,6 @@ curses_update_stats(void)
         draw_horizontal(x, y, hp, hpmax);
     else
         draw_vertical(x, y, hp, hpmax);
-
-    if (border)
-        box(win, 0, 0);
 
     wnoutrefresh(win);
 
@@ -611,8 +598,6 @@ draw_horizontal_new(int x, int y, int hp, int hpmax)
 
     y -= 2;
     x = getmaxx(win);
-    if (curses_window_has_border(STATUS_WIN))
-        x--;
 
     x -= stat_length;
     int orig_x = x;
@@ -772,13 +757,10 @@ curses_add_statuses(WINDOW *win, boolean align_right,
 {
     if (align_right) {
         /* Right-aligned statuses. Since add_status decrease one x more
-           (to separate them with spaces), add 1 to x unless we have borders
-           (which would offset what add_status does) */
+           (to separate them with spaces), add 1 to x */
         int mx = *x;
         int my = *y;
         getmaxyx(win, my, mx);
-        if (!curses_window_has_border(STATUS_WIN))
-            mx++;
 
         *x = mx;
     }

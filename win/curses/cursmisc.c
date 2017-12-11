@@ -71,7 +71,7 @@ curses_getch(WINDOW *win, void (*callback) (void *), void *arg)
             /* Figure out if the terminal was really resized */
             int old_term_rows = term_rows;
             int old_term_cols = term_cols;
-            getmaxyx(base_term, term_rows, term_cols);
+            getmaxyx(stdscr, term_rows, term_cols);
             if (term_rows != old_term_rows || term_cols != old_term_cols)
                 curses_redraw(callback, arg);
         } else
@@ -527,18 +527,10 @@ curses_move_cursor(winid wid, int x, int y)
     int xadj = 0;
     int yadj = 0;
 
-#ifndef PDCURSES
     WINDOW *win = curses_get_nhwin(MAP_WIN);
-#endif
-
-    if (wid != MAP_WIN) {
+    if (wid != MAP_WIN)
         return;
-    }
-#ifdef PDCURSES
-    /* PDCurses seems to not handle wmove correctly, so we use move and
-       physical screen coordinates instead */
-    curses_get_window_xy(wid, &xadj, &yadj);
-#endif
+
     curs_x = x + xadj;
     curs_y = y + yadj;
     curses_map_borders(&sx, &sy, &ex, &ey, x, y);
@@ -551,11 +543,7 @@ curses_move_cursor(winid wid, int x, int y)
     if ((x >= sx) && (x <= ex) && (y >= sy) && (y <= ey)) {
         curs_x -= sx;
         curs_y -= sy;
-#ifdef PDCURSES
-        move(curs_y, curs_x);
-#else
         wmove(win, curs_y, curs_x);
-#endif
     }
 }
 
@@ -883,11 +871,6 @@ curses_get_mouse(int *mousex, int *mousey, int *mod)
                 key = 0;        /* Flag mouse click */
                 *mousex = event.x;
                 *mousey = event.y;
-
-                if (curses_window_has_border(MAP_WIN)) {
-                    (*mousex)--;
-                    (*mousey)--;
-                }
 
                 *mod = CLICK_1;
             }

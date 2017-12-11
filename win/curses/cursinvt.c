@@ -11,27 +11,15 @@
 void
 curses_update_inv(void)
 {
+    if (curses_state.last_perm_invent != flags.perm_invent)
+        curses_redraw(NULL, NULL);
+
     WINDOW *win = curses_get_nhwin(INV_WIN);
-
-    /* Check if the inventory window is enabled in first place */
-    if (!win) {
-        /* It's not. Re-initialize the main windows if the
-           option was enabled. */
-        if (flags.perm_invent)
-            curses_redraw(NULL, NULL);
-
+    if (!win)
         return;
-    }
 
-    boolean border = curses_window_has_border(INV_WIN);
-
-    /* Figure out drawing area */
     int x = 0;
     int y = 0;
-    if (border) {
-        x++;
-        y++;
-    }
 
     /* Clear the window as it is at the moment. */
     werase(win);
@@ -48,9 +36,6 @@ curses_update_inv(void)
 
     display_inventory(NULL, FALSE);
 
-    if (border)
-        box(win, 0, 0);
-
     wnoutrefresh(win);
 }
 
@@ -61,12 +46,7 @@ curses_add_inv(int y, int glyph, CHAR_P accelerator, attr_t attr,
 {
     WINDOW *win = curses_get_nhwin(INV_WIN);
 
-    /* Figure out where to draw the line */
     int x = 0;
-    if (curses_window_has_border(INV_WIN)) {
-        x++;
-        y++;
-    }
 
     wmove(win, y, x);
     if (accelerator) {

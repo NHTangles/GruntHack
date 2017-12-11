@@ -70,7 +70,7 @@ struct window_procs curses_procs = {
    the inventory window. */
 static int inv_update = 0;
 
-/*  
+/*
 init_nhwindows(int* argcp, char** argv)
                 -- Initialize the windows used by NetHack.  This can also
                    create the standard windows listed at the top, but does
@@ -88,18 +88,22 @@ void
 curses_init_nhwindows(int *argcp, char **argv)
 {
     initialize_uncursed(argcp, argv);
-    uncursed_set_title("GruntHack");
-
-#ifdef PDCURSES
     char window_title[BUFSZ];
+    const char *game = "GruntHack";
+#ifdef DEF_GAME_NAME
+    game = DEF_GAME_NAME;
 #endif
 
-#ifdef XCURSES
-    base_term = Xinitscr(*argcp, argv);
-#else
-    base_term = initscr();
+    const char *versionstr = NULL;
+#ifdef VERSION_STRING
+    versionstr = VERSION_STRING;
 #endif
-#ifdef TEXTCOLOR
+    snprintf(window_title, BUFSZ, "%s", game);
+    if (versionstr)
+        snprintf(window_title, BUFSZ, "%s %s", game, versionstr);
+
+    uncursed_set_title(window_title);
+    initscr();
     if (has_colors()) {
         start_color();
         curses_init_nhcolors();
@@ -109,47 +113,8 @@ curses_init_nhwindows(int *argcp, char **argv)
         iflags.wc2_guicolor = FALSE;
         set_wc2_option_mod_status(WC2_GUICOLOR, SET_IN_FILE);
     }
-#else
-    iflags.use_color = FALSE;
-    set_option_mod_status("color", SET_IN_FILE);
-    iflags.wc2_guicolor = FALSE;
-    set_wc2_option_mod_status(WC2_GUICOLOR, SET_IN_FILE);
-#endif
-    noecho();
     raw();
-    meta(stdscr, TRUE);
-    orig_cursor = curs_set(0);
-    keypad(stdscr, TRUE);
-#ifdef NCURSES_VERSION
-# ifdef __APPLE__
-    ESCDELAY = 25;
-# else
-    set_escdelay(25);
-# endif/* __APPLE__ */
-#endif /* NCURSES_VERSION */
-#ifdef PDCURSES
-# ifdef DEF_GAME_NAME
-#  ifdef VERSION_STRING
-    sprintf(window_title, "%s %s", DEF_GAME_NAME, VERSION_STRING);
-#  else
-    sprintf(window_title, "%s", DEF_GAME_NAME);
-#  endif
-       /* VERSION_STRING */
-# else
-#  ifdef VERSION_STRING
-    sprintf(window_title, "%s %s", "NetHack", VERSION_STRING);
-#  else
-    sprintf(window_title, "%s", "NetHack");
-#  endif
-       /* VERSION_STRING */
-# endif/* DEF_GAME_NAME */
-    PDC_set_title(window_title);
-    PDC_set_blink(TRUE);        /* Only if the user asks for it! */
-    timeout(1);
-    (void) getch();
-    timeout(-1);
-#endif /* PDCURSES */
-    getmaxyx(base_term, term_rows, term_cols);
+    getmaxyx(stdscr, term_rows, term_cols);
     curses_init_options();
     if ((term_rows < 15) || (term_cols < 40)) {
         panic("Terminal too small.  Must be minumum 40 width and 15 height");
@@ -183,7 +148,7 @@ curses_get_nh_event()
 {
     int old_term_rows = term_rows;
     int old_term_cols = term_cols;
-    getmaxyx(base_term, term_rows, term_cols);
+    getmaxyx(stdscr, term_rows, term_cols);
     if (term_rows == old_term_rows && term_cols == old_term_cols)
         return;
 
@@ -196,7 +161,6 @@ void
 curses_exit_nhwindows(const char *str)
 {
     curses_cleanup();
-    curs_set(orig_cursor);
     endwin();
     iflags.window_inited = 0;
     if (str != NULL) {
@@ -467,12 +431,11 @@ curses_update_inventory(void)
 {
     /* Don't do anything if perm_invent is off unless we
        changed the option. */
-    if (!flags.perm_invent) {
-        if (curses_get_nhwin(INV_WIN))
-            curses_redraw(NULL, NULL);
+    if (curses_state.last_perm_invent != flags.perm_invent)
+        curses_redraw(NULL, NULL);
 
+    if (!curses_get_nhwin(INV_WIN))
         return;
-    }
 
     /* Update inventory sidebar. NetHack uses normal menu functions
        when drawing the inventory, and we don't want to change the
@@ -620,8 +583,8 @@ int nh_poskey(int *x, int *y, int *mod)
                    a position in the MAP window is returned in x, y and mod.
                    mod may be one of
 
-                        CLICK_1         -- mouse click type 1 
-                        CLICK_2         -- mouse click type 2 
+                        CLICK_1         -- mouse click type 1
+                        CLICK_2         -- mouse click type 2
 
                    The different click types can map to whatever the
                    hardware supports.  If no mouse is supported, this
@@ -779,7 +742,7 @@ preference_update(preference)
                    port of that change.  If your window-port is capable of
                    dynamically adjusting to the change then it should do so.
                    Your window-port will only be notified of a particular
-                   change if it indicated that it wants to be by setting the 
+                   change if it indicated that it wants to be by setting the
                    corresponding bit in the wincap mask.
 */
 void

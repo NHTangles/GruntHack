@@ -19,6 +19,7 @@
 #define GRUNTHACK_CURSES    5
 #define DNETHACK_CURSES     6
 
+static boolean curses_setup_mainwins(int);
 static void set_window_position(int *, int *, int *, int *, int,
                                 int *, int *, int *, int *, int,
                                 int, int);
@@ -194,184 +195,437 @@ set_window_position(int *winx, int *winy, int *winw, int *winh, int orientation,
     }
 }
 
+/* Tells what directions to linedraw in.
+   1: up, 2: right, 4: down, 8: left. */
+static const cchar_t *
+linedrawchs(int dir)
+{
+    switch (dir) {
+    case 1: return WACS_PLUS; /* unused */
+    case 2: return WACS_PLUS; /* unused */
+    case 3: return WACS_LLCORNER;
+    case 4: return WACS_PLUS; /* unused */
+    case 5: return WACS_VLINE;
+    case 6: return WACS_ULCORNER;
+    case 7: return WACS_LTEE;
+    case 8: return WACS_PLUS; /* unused */
+    case 9: return WACS_LRCORNER;
+    case 10: return WACS_HLINE;
+    case 11: return WACS_BTEE;
+    case 12: return WACS_URCORNER;
+    case 13: return WACS_RTEE;
+    case 14: return WACS_TTEE;
+    case 15: return WACS_PLUS;
+    default: return WACS_PLUS; /* unused */
+    }
+};
+
+static void
+draw_frame(int rows, int cols, xchar linedrawing[rows][cols])
+{
+    int x, y;
+    const cchar_t *ch;
+    for (x = 0; x < cols; x++) {
+        for (y = 0; y < rows; y++) {
+            if (!linedrawing[y][x]) {
+                mvaddch(y, x, ' ');
+                continue;
+            }
+
+            mvadd_wch(y, x, linedrawchs(linedrawing[y][x]));
+        }
+    }
+
+    refresh();
+}
+
+static void
+set_linedraw(int y, int x, int rows, int cols,
+             xchar linedrawing[rows][cols], int value)
+{
+    if (y < 0 || x < 0 || y >= rows || x >= cols)
+        return;
+
+    linedrawing[y][x] |= value;
+}
+
+static void
+add_frame(int begy, int begx, int h, int w,
+          int rows, int cols, xchar linedrawing[rows][cols])
+{
+    int y, x;
+    if (!h || !w)
+        return;
+
+    /* Corners */
+    set_linedraw(begy, begx, rows, cols, linedrawing, 6);
+    set_linedraw(begy + h, begx, rows, cols, linedrawing, 3);
+    set_linedraw(begy, begx + w, rows, cols, linedrawing, 12);
+    set_linedraw(begy + h, begx + w, rows, cols, linedrawing, 9);
+
+    /* Vertical lines */
+    for (y = begy + 1; y < (begy + h); y++) {
+        set_linedraw(y, begx, rows, cols, linedrawing, 5);
+        set_linedraw(y, begx + w, rows, cols, linedrawing, 5);
+    }
+
+    /* Horizontal lines */
+    for (x = begx + 1; x < (begx + w); x++) {
+        set_linedraw(begy, x, rows, cols, linedrawing, 10);
+        set_linedraw(begy + h, x, rows, cols, linedrawing, 10);
+    }
+}
+
 /* Create the "main" nonvolitile windows used by nethack */
 void
 curses_create_main_windows()
 {
-    int min_message_height = 1;
-    int message_orientation = 0;
-    int status_orientation = 0;
-    int border_space = 0;
-    int hspace = term_cols - 80;
-    boolean borders = FALSE;
+    /* Attempt to set up window positions up to 3 times depending
+       on border setting. If complete frames didn't work, try
+       without the outer frame. If that didn't work either, try
+       without borders (except in menus). Should that also fail,
+       our terminal is too small. */
+    int border = iflags.wc2_windowborders;
+    curses_state.in_resize = TRUE;
+    do {
+        if (border > 3 || border < 0)
+            border = 3;
 
-    switch (iflags.wc2_windowborders) {
-    case 1:                     /* On */
-        borders = TRUE;
-        break;
-    case 2:                     /* Off */
-        borders = FALSE;
-        break;
-    case 3:                     /* Auto */
-        if ((term_cols > 81) && (term_rows > 25)) {
-            borders = TRUE;
-        }
-        break;
-    default:
-        borders = FALSE;
+        do {
+            if (curses_setup_mainwins(border)) {
+                curses_state.border = border;
+                curses_state.in_resize = FALSE;
+                return; /* success */
+            }
+
+            border--;
+        } while (border > 1);
+
+        /* Our window is too small... */
+        erase();
+        mvaddstr(0, 0, "This game requires a terminal");
+        mvaddstr(1, 0, "size of at least 80x24 to");
+        mvaddstr(2, 0, "function.");
+        mvprintw(3, 0, "Current: %dx%d", LINES, COLS);
+        getch();
+        refresh();
+    } while (TRUE);
+}
+
+static boolean
+curses_setup_mainwins(int border)
+{
+    /* Set up frame map */
+    int x, y;
+    int rows, cols, begx, begy;
+    xchar linedrawing[LINES][COLS];
+    memset(linedrawing, 0, sizeof (linedrawing[0][0]) * LINES * COLS);
+    rows = LINES;
+    cols = COLS;
+    begx = 0;
+    begy = 0;
+    if (border == 3) {
+        rows -= 2;
+        cols -= 2;
+        begx++;
+        begy++;
+        add_frame(begy - 1, begx - 1, rows + 1, cols + 1,
+                  LINES, COLS, linedrawing);
     }
 
+    /* We can't try to account for status/message here since
+       they can be vertically or horizontally aligned. Only
+       consider the game area (Technically reundant, but this
+       avoids a bunch of useless calculations). */
+    if (rows < ROWNO ||
+        cols < COLNO)
+        return FALSE; /* too small! */
 
-    if (borders) {
-        border_space = 2;
-        hspace -= border_space;
-    }
-
-    if ((term_cols - border_space) < COLNO) {
-        min_message_height++;
-    }
-
-    /* Determine status window orientation */
-    if (!iflags.wc_align_status || (iflags.wc_align_status == ALIGN_TOP)
-        || (iflags.wc_align_status == ALIGN_BOTTOM)) {
-        if (!iflags.wc_align_status) {
-            iflags.wc_align_status = ALIGN_BOTTOM;
-        }
-        status_orientation = iflags.wc_align_status;
-    } else {                    /* left or right alignment */
-
-        /* Max space for player name and title horizontally */
-        if ((hspace >= 26) && (term_rows >= 24)) {
-            status_orientation = iflags.wc_align_status;
-            hspace -= (26 + border_space);
-        } else {
-            status_orientation = ALIGN_BOTTOM;
-        }
-    }
-
-    /* Determine message window orientation */
-    if (!iflags.wc_align_message || (iflags.wc_align_message == ALIGN_TOP)
-        || (iflags.wc_align_message == ALIGN_BOTTOM)) {
-        if (!iflags.wc_align_message) {
-            iflags.wc_align_message = ALIGN_TOP;
-        }
-        message_orientation = iflags.wc_align_message;
-    } else {                    /* left or right alignment */
-
-        if ((hspace - border_space) >= 25) {    /* Arbitrary */
-            message_orientation = iflags.wc_align_message;
-        } else {
-            message_orientation = ALIGN_TOP;
-        }
-    }
-
-    /* Figure out window positions and placements. Status and message area can be aligned
-       based on configuration. The priority alignment-wise is: status > msgarea > game.
-       Define everything as taking as much space as possible and shrink/move based on
-       alignment positions. */
-    int message_x = 0;
-    int message_y = 0;
-    int status_x = 0;
-    int status_y = 0;
-    int inv_x = 0;
-    int inv_y = 0;
-    int map_x = 0;
-    int map_y = 0;
-
-    int message_height = 0;
-    int message_width = 0;
-    int status_height = 0;
-    int status_width = 0;
-    int inv_height = 0;
-    int inv_width = 0;
-    int map_height = (term_rows - border_space);
-    int map_width = (term_cols - border_space);
-
-    boolean status_vertical = FALSE;
-    boolean msg_vertical = FALSE;
-    if (status_orientation == ALIGN_LEFT ||
-        status_orientation == ALIGN_RIGHT)
-        status_vertical = TRUE;
-    if (message_orientation == ALIGN_LEFT ||
-        message_orientation == ALIGN_RIGHT)
-        msg_vertical = TRUE;
-
-    int statusheight = 3;
+    int statalign = 0;
+    int statoalign = 0;
+    boolean statdone = FALSE;
+    int statx = 0;
+    int staty = 0;
+    int statw = 26;
+    int statow = 26;
+    int stath = 3;
     if (iflags.classic_status)
-        statusheight = 2;
+        stath--;
+    int statoh = stath;
+    int msgalign = 0;
+    int msgoalign = 0;
+    boolean msgdone = FALSE;
+    int msgx = 0;
+    int msgy = 0;
+    int msgw = 25;
+    int msgow = 25;
+    int msgh = 1;
+    int msgoh = 1;
+    int invalign = ALIGN_RIGHT;
+    int invoalign = ALIGN_RIGHT;
+    boolean invdone = FALSE;
+    int invx = 0;
+    int invy = 0;
+    int invw = 20;
+    int invow = 20;
+    int invh = 1;
+    int invoh = 1;
+    int mapx = 0;
+    int mapy = 0;
+    int maph = ROWNO;
+    int mapw = COLNO;
+    int bsp = 0; /* Border spacing */
+    if (border > 1)
+        bsp++;
 
-    /* Vertical windows have priority. Otherwise, priotity is:
-       status > inv > msg */
-    if (status_vertical)
-        set_window_position(&status_x, &status_y, &status_width, &status_height,
-                            status_orientation, &map_x, &map_y, &map_width, &map_height,
-                            border_space, statusheight, 26);
+    /* Set up status/message alignment */
+    if (!iflags.wc_align_status)
+        iflags.wc_align_status = ALIGN_BOTTOM;
+    statalign = iflags.wc_align_status;
+    if (!iflags.wc_align_message)
+        iflags.wc_align_message = ALIGN_BOTTOM;
+    msgalign = iflags.wc_align_message;
+    curses_state.last_perm_invent = flags.perm_invent;
+    boolean sidebar = flags.perm_invent;
 
-    if (flags.perm_invent) {
-        /* Take up all width unless msgbar is also vertical. */
-        int width = -25;
-        if (msg_vertical)
-            width = 25;
+#define horizontal(a) ((a) == ALIGN_TOP || (a) == ALIGN_BOTTOM)
+#define vertical(a) (!horizontal(a))
 
-        set_window_position(&inv_x, &inv_y, &inv_width, &inv_height,
-                            ALIGN_RIGHT, &map_x, &map_y, &map_width, &map_height,
-                            border_space, -1, width);
-    }
+    /* Potentially realign things which don't fit */
+    boolean horizontalized = FALSE;
+    boolean verticalized = FALSE;
+    boolean pass = 2;
+    while (pass--) {
+        /* Check vertical setup */
+        while (TRUE) {
+            int space_left = cols - begx;
+            if (space_left < mapw)
+                return FALSE;
 
-    if (msg_vertical)
-        set_window_position(&message_x, &message_y, &message_width, &message_height,
-                            message_orientation, &map_x, &map_y, &map_width, &map_height,
-                            border_space, -1, -25);
+            statw = statow;
+            msgw = msgow;
+            invw = invow;
+            if (horizontal(statalign))
+                statw = 0;
+            else {
+                space_left -= statw;
+                space_left -= bsp;
+                if (space_left < mapw) {
+                    statalign = ALIGN_BOTTOM;
+                    horizontalized = TRUE;
+                    continue;
+                }
+            }
+            if (horizontal(msgalign))
+                msgw = 0;
+            else {
+                space_left -= msgw;
+                space_left -= bsp;
+                if (space_left < mapw) {
+                    msgalign = ALIGN_TOP;
+                    horizontalized = TRUE;
+                    continue;
+                }
+            }
+            if (!sidebar)
+                invw = 0;
+            else {
+                space_left -= invw;
+                space_left -= bsp;
+                if (space_left < mapw) {
+                    sidebar = FALSE;
+                    horizontalized = TRUE;
+                    continue;
+                }
+            }
 
-    /* Now draw horizontal windows */
-    if (!status_vertical)
-        set_window_position(&status_x, &status_y, &status_width, &status_height,
-                            status_orientation, &map_x, &map_y, &map_width, &map_height,
-                            border_space, statusheight, 26);
+            break;
+        }
 
-    if (!msg_vertical)
-        set_window_position(&message_x, &message_y, &message_width, &message_height,
-                            message_orientation, &map_x, &map_y, &map_width, &map_height,
-                            border_space, -1, -25);
+        /* Do the same horizontally */
+        while (TRUE) {
+            int space_left = rows - begy;
+            if (space_left < maph)
+                return FALSE;
 
-    if (map_width > COLNO)
-        map_width = COLNO;
+            stath = statoh;
+            msgh = msgoh;
+            invh = invoh;
+            if (vertical(statalign))
+                stath = 0;
+            else {
+                space_left -= stath;
+                space_left -= bsp;
+                if (space_left < maph) {
+                    statalign = ALIGN_RIGHT;
+                    verticalized = TRUE;
+                    continue;
+                }
+            }
+            if (vertical(msgalign))
+                msgh = 0;
+            else {
+                space_left -= msgh;
+                space_left -= bsp;
+                if (space_left < maph) {
+                    msgalign = ALIGN_RIGHT;
+                    verticalized = TRUE;
+                    continue;
+                }
+            }
 
-    if (map_height > ROWNO)
-        map_height = ROWNO;
+            break;
+        }
+    } while (0);
 
-    if (curses_get_nhwin(STATUS_WIN)) {
-        curses_del_nhwin(STATUS_WIN);
-        curses_del_nhwin(MESSAGE_WIN);
-        curses_del_nhwin(MAP_WIN);
+    /* If we repositioned in both instances, the terminal is
+       too small, so bail out. */
+    if (horizontalized && verticalized)
+        return FALSE;
+
+    if (curses_get_nhwin(INV_WIN))
         curses_del_nhwin(INV_WIN);
 
-        clear();
+    /* Inventory sidebar */
+    curses_state.sidebar = sidebar;
+    if (sidebar) {
+        invh = rows;
+        invy = begy;
+
+        /* Figure out width. If the message area is vertical,
+           it claims all the space. Otherwise, sidebar does. */
+        invw = invow;
+        if (horizontal(msgalign)) {
+            invw = cols - bsp - mapw;
+            if (vertical(statalign)) {
+                invw -= statow;
+                invw -= bsp;
+            }
+        }
+        invx = begy + cols - invw;
+
+        cols -= invw + bsp;
+        if (border)
+            add_frame(invy - 1, invx - 1, invh + 1, invw + 1,
+                      LINES, COLS, linedrawing);
     }
 
-    curses_add_nhwin(STATUS_WIN, status_height, status_width, status_y,
-                     status_x, status_orientation, borders);
+    /* Message window */
+    msgh = rows;
+    if (horizontal(msgalign)) {
+        msgh -= maph;
+        msgh -= bsp;
+        if (horizontal(statalign)) {
+            msgh -= statoh;
+            msgh -= bsp;
+        }
+    }
 
-    curses_add_nhwin(MESSAGE_WIN, message_height, message_width, message_y,
-                     message_x, message_orientation, borders);
+    msgw = cols;
+    if (vertical(msgalign)) {
+        msgw -= mapw;
+        msgw -= bsp;
+        if (vertical(statalign)) {
+            msgw -= statow;
+            msgw -= bsp;
+        }
+    }
 
-    if (flags.perm_invent)
-        curses_add_nhwin(INV_WIN, inv_height, inv_width, inv_y, inv_x,
-                         ALIGN_RIGHT, borders);
+    msgy = begy;
+    if (msgalign == ALIGN_BOTTOM)
+        msgy = begy + rows - msgh;
 
-    curses_add_nhwin(MAP_WIN, map_height, map_width, map_y, map_x, 0, borders);
+    msgx = begx;
+    if (msgalign == ALIGN_RIGHT)
+        msgx = begx + cols - msgw;
 
-    refresh();
+    if (curses_get_nhwin(MESSAGE_WIN))
+        curses_del_nhwin(MESSAGE_WIN);
+
+    switch (msgalign) {
+    case ALIGN_TOP:
+        begy += msgh + bsp;
+    case ALIGN_BOTTOM:
+        rows -= msgh + bsp;
+        break;
+    case ALIGN_LEFT:
+        begx += msgw + bsp;
+    case ALIGN_RIGHT:
+        cols -= msgw + bsp;
+        break;
+    }
+
+    if (border)
+        add_frame(msgy - 1, msgx - 1, msgh + 1, msgw + 1,
+                  LINES, COLS, linedrawing);
+
+    /* Status window */
+    stath = rows;
+    if (horizontal(statalign)) {
+        stath -= maph;
+        stath -= bsp;
+    }
+
+    statw = cols;
+    if (vertical(statalign)) {
+        statw -= mapw;
+        statw -= bsp;
+    }
+
+    staty = begy;
+    if (statalign == ALIGN_BOTTOM)
+        staty = begy + rows - stath;
+
+    statx = begx;
+    if (statalign == ALIGN_RIGHT)
+        statx = begx + cols - statw;
+
+    if (curses_get_nhwin(STATUS_WIN))
+        curses_del_nhwin(STATUS_WIN);
+
+    switch (statalign) {
+    case ALIGN_TOP:
+        begy += stath + bsp;
+    case ALIGN_BOTTOM:
+        rows -= stath + bsp;
+        break;
+    case ALIGN_LEFT:
+        begx += statw + bsp;
+    case ALIGN_RIGHT:
+        cols -= statw + bsp;
+        break;
+    }
+
+    if (border) {
+        add_frame(staty - 1, statx - 1, stath + 1, statw + 1,
+                  LINES, COLS, linedrawing);
+        add_frame(begy - 1, begx - 1, rows + 1, cols + 1,
+                  LINES, COLS, linedrawing);
+    }
+
+    draw_frame(LINES, COLS, linedrawing);
+
+    curses_add_nhwin(STATUS_WIN, stath, statw, staty, statx,
+                     statalign, FALSE);
+    curses_add_nhwin(MESSAGE_WIN, msgh, msgw, msgy, msgx,
+                     msgalign, FALSE);
+    if (sidebar)
+        curses_add_nhwin(INV_WIN, invh, invw, invy, invx,
+                         ALIGN_RIGHT, FALSE);
+
+    curses_add_nhwin(MAP_WIN, rows, cols, begy, begx, 0, FALSE);
 
     curses_refresh_nethack_windows();
 
     if (iflags.window_inited) {
         curses_update_stats();
-        if (flags.perm_invent)
+        if (sidebar)
             curses_update_inventory();
     } else {
         iflags.window_inited = TRUE;
     }
+
+    return TRUE;
 }
 
 
@@ -1360,48 +1614,14 @@ curses_init_options()
     if (iflags.DECgraphics) {
         switch_graphics(CURS_GRAPHICS);
     }
-#ifdef PDCURSES
-    /* PDCurses for SDL, win32 and OS/2 has the ability to set the
-       terminal size programatically.  If the user does not specify a
-       size in the config file, we will set it to a nice big 110x32 to
-       take advantage of some of the nice features of this windowport. */
-    if (iflags.wc2_term_cols == 0) {
-        iflags.wc2_term_cols = 110;
-    }
-
-    if (iflags.wc2_term_rows == 0) {
-        iflags.wc2_term_rows = 32;
-    }
-
-    resize_term(iflags.wc2_term_rows, iflags.wc2_term_cols);
-    getmaxyx(base_term, term_rows, term_cols);
-
-    /* This is needed for an odd bug with PDCurses-SDL */
-    switch_graphics(ASCII_GRAPHICS);
-    if (iflags.IBMgraphics) {
-        switch_graphics(IBM_GRAPHICS);
-    } else if (iflags.cursesgraphics) {
-        switch_graphics(CURS_GRAPHICS);
-    } else {
-        switch_graphics(ASCII_GRAPHICS);
-    }
-#endif /* PDCURSES */
     if (!iflags.wc2_windowborders) {
         iflags.wc2_windowborders = 3;   /* Set to auto if not specified */
     }
 
-    if (!iflags.wc2_petattr) {
+    if (!iflags.wc2_petattr)
         iflags.wc2_petattr = A_REVERSE;
-    } else {                    /* Pet attribute specified, so hilite_pet should be true */
-
+    else /* Pet attribute specified, so hilite_pet should be true */
         iflags.hilite_pet = TRUE;
-    }
-
-#ifdef NCURSES_MOUSE_VERSION
-    if (iflags.wc_mouse_support) {
-        mousemask(BUTTON1_CLICKED, NULL);
-    }
-#endif
 }
 
 

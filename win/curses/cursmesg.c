@@ -42,9 +42,7 @@ curses_message_win_puts(const char *message, boolean recursed)
     int height, width, linespace;
     char *tmpstr;
     WINDOW *win = curses_get_nhwin(MESSAGE_WIN);
-    boolean border = curses_window_has_border(MESSAGE_WIN);
     int message_length = strlen(message);
-    int border_space = 0;
     static long suppress_turn = -1;
 
     if (strncmp("Count:", message, 6) == 0) {
@@ -57,17 +55,8 @@ curses_message_win_puts(const char *message, boolean recursed)
     }
 
     curses_get_window_size(MESSAGE_WIN, &height, &width);
-    if (border) {
-        border_space = 1;
-        if (mx < 1) {
-            mx = 1;
-        }
-        if (my < 1) {
-            my = 1;
-        }
-    }
 
-    linespace = ((width + border_space) - 3) - mx;
+    linespace = (width - 3) - mx;
 
     if (!recursed) {
         strcpy(toplines, message);
@@ -75,7 +64,7 @@ curses_message_win_puts(const char *message, boolean recursed)
     }
 
     if (linespace < message_length) {
-        if (my >= (height - 1 + border_space)) {        /* bottom of message win */
+        if (my >= (height - 1)) {        /* bottom of message win */
             if ((turn_lines > height) || (height == 1)) {
                 /* Pause until key is hit - Esc suppresses any further
                    messages that turn */
@@ -88,9 +77,9 @@ curses_message_win_puts(const char *message, boolean recursed)
                 turn_lines++;
             }
         } else {
-            if (mx != border_space) {
+            if (mx) {
                 my++;
-                mx = border_space;
+                mx = 0;
             }
         }
     }
@@ -99,7 +88,7 @@ curses_message_win_puts(const char *message, boolean recursed)
         curses_toggle_color_attr(win, NONE, A_BOLD, ON);
     }
 
-    if ((mx == border_space) && ((message_length + 2) > width)) {
+    if (!mx && ((message_length + 2) > width)) {
         tmpstr = curses_break_str(message, (width - 2), 1);
         mvwprintw(win, my, mx, "%s", tmpstr);
         mx += strlen(tmpstr);
@@ -164,7 +153,6 @@ void
 curses_clear_unhighlight_message_window()
 {
     int mh, mw, count;
-    boolean border = curses_window_has_border(MESSAGE_WIN);
     WINDOW *win = curses_get_nhwin(MESSAGE_WIN);
 
     turn_lines = 1;
@@ -173,24 +161,13 @@ curses_clear_unhighlight_message_window()
 
     mx = 0;
 
-    if (border) {
-        mx++;
-    }
-
     if (mh == 1) {
         curses_clear_nhwin(MESSAGE_WIN);
     } else {
         mx += mw;               /* Force new line on new turn */
 
-        if (border) {
-
-            for (count = 0; count < mh; count++) {
-                mvwchgat(win, count + 1, 1, mw, COLOR_PAIR(8), A_NORMAL, NULL);
-            }
-        } else {
-            for (count = 0; count < mh; count++) {
-                mvwchgat(win, count, 0, mw, COLOR_PAIR(8), A_NORMAL, NULL);
-            }
+        for (count = 0; count < mh; count++) {
+            mvwchgat(win, count, 0, mw, COLOR_PAIR(8), A_NORMAL, NULL);
         }
 
         wnoutrefresh(win);
@@ -204,15 +181,8 @@ recent messages. */
 void
 curses_last_messages()
 {
-    boolean border = curses_window_has_border(MESSAGE_WIN);
-
-    if (border) {
-        mx = 1;
-        my = 1;
-    } else {
-        mx = 0;
-        my = 0;
-    }
+    mx = 0;
+    my = 0;
 
     nhprev_mesg *mesg;
     int i;
@@ -335,8 +305,6 @@ curses_count_window(const char *count_text)
         wrefresh(win);
         getyx(win, winy, winx);
         winx = 0;
-        if (curses_window_has_border(MESSAGE_WIN))
-            winx++;
 
         startx = winx;
         starty = winy;
@@ -368,7 +336,6 @@ static void
 directional_scroll(winid wid, int nlines)
 {
     int wh, ww, s_top, s_bottom;
-    boolean border = curses_window_has_border(wid);
     WINDOW *win = curses_get_nhwin(wid);
 
     curses_get_window_size(wid, &wh, &ww);
@@ -376,32 +343,14 @@ directional_scroll(winid wid, int nlines)
         curses_clear_nhwin(wid);
         return;
     }
-    if (border) {
-        /* Wipe out the top or bottom line to avoid having
-           box characters bleed into the main message area. */
-        if (nlines < 0)
-            wmove(win, 0, 0);
-        else
-            wmove(win, wh + 1, 0);
-        wclrtoeol(win);
-        s_top = 1;
-        s_bottom = wh;
-    } else {
-        s_top = 0;
-        s_bottom = wh - 1;
-    }
+    s_top = 0;
+    s_bottom = wh - 1;
     scrollok(win, TRUE);
     wscrl(win, nlines);
     scrollok(win, FALSE);
-    if (wid == MESSAGE_WIN) {
-        if (border)
-            mx = 1;
-        else
-            mx = 0;
-    }
-    if (border) {
-        box(win, 0, 0);
-    }
+    if (wid == MESSAGE_WIN)
+        mx = 0;
+
     wrefresh(win);
 }
 

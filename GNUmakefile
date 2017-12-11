@@ -12,6 +12,7 @@ CPPFLAGS += -DAIMAKE_BUILDOS_linux
 CPPFLAGS += -include dumbmake.h
 CPPFLAGS += -Iinclude
 CPPFLAGS += -Ilibuncursed/include
+CPPFLAGS += -DHACKDIR=\"$(GAMEDIR)\"
 
 .DELETE_ON_ERROR:
 

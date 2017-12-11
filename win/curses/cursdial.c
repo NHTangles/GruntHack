@@ -136,8 +136,7 @@ reset_getlin(void *vgldat)
     if (iflags.window_inited && !iflags.wc_popup_dialog) {
         /* Using the message window. */
         curses_get_window_size(MESSAGE_WIN, &height, &width);
-        if (!curses_window_has_border(MESSAGE_WIN))
-            width--; /* We only care about the right, not the left, border. */
+        width--;
 
         pline("%s", gldat->prompt);
         waddch(msgwin, ' ');

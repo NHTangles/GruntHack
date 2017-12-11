@@ -1,48 +1,40 @@
+/* vim:set cin ft=c sw=4 sts=4 ts=8 et ai cino=Ls\:0t0(0 : -*- mode:c;fill-column:80;tab-width:8;c-basic-offset:4;indent-tabs-mode:nil;c-file-style:"k&r" -*-*/
+
 #ifndef WINCURS_H
-#define WINCURS_H
+# define WINCURS_H
 
 /* Global declarations for curses interface */
 
-int term_rows, term_cols; /* size of underlying terminal */
+/* Don't move #include "uncursed.h" here. This results in a name clash with
+   uncursed delay_output vs NetHack's delay_output */
 
-WINDOW *base_term;    /* underlying terminal window */
+int term_rows, term_cols; /* size of underlying terminal */
 
 WINDOW *mapwin, *statuswin, *messagewin;    /* Main windows */
 
-int orig_cursor;	/* Preserve initial cursor state */
-
-
-#define TEXTCOLOR   /* Allow color */
-#define NHW_END 19
-#define OFF 0
-#define ON 1
-#define NONE -1
-#define DIALOG_BORDER_COLOR CLR_MAGENTA
-#define ALERT_BORDER_COLOR CLR_RED
-#define SCROLLBAR_COLOR CLR_MAGENTA
-#define SCROLLBAR_BACK_COLOR CLR_BLACK
-#define HIGHLIGHT_COLOR CLR_WHITE
-#define MORECOLOR CLR_ORANGE
-#define STAT_UP_COLOR CLR_GREEN
-#define STAT_DOWN_COLOR CLR_RED
-#define MESSAGE_WIN 1
-#define STATUS_WIN  2
-#define MAP_WIN     3
-#define INV_WIN     4
-#define COUNT_WIN   5
-#define NHWIN_MAX   6
-#define MESG_HISTORY_MAX   200
-#if !defined(__APPLE__) || !defined(NCURSES_VERSION)
+# define TEXTCOLOR   /* Allow color */
+# define NHW_END 19
+# define OFF 0
+# define ON 1
+# define NONE -1
+# define DIALOG_BORDER_COLOR CLR_MAGENTA
+# define ALERT_BORDER_COLOR CLR_RED
+# define SCROLLBAR_COLOR CLR_MAGENTA
+# define SCROLLBAR_BACK_COLOR CLR_BLACK
+# define HIGHLIGHT_COLOR CLR_WHITE
+# define MORECOLOR CLR_ORANGE
+# define STAT_UP_COLOR CLR_GREEN
+# define STAT_DOWN_COLOR CLR_RED
+# define MESSAGE_WIN 1
+# define STATUS_WIN  2
+# define MAP_WIN     3
+# define INV_WIN     4
+# define COUNT_WIN   5
+# define NHWIN_MAX   6
+# define MESG_HISTORY_MAX   200
 # define USE_DARKGRAY /* Allow "bright" black; delete if not visible */
-#endif	/* !__APPLE__ && !PDCURSES */
-#define CURSES_DARK_GRAY    17
-#define MAP_SCROLLBARS
-#ifdef PDCURSES
-# define getmouse nc_getmouse
-# ifndef NCURSES_MOUSE_VERSION
-#  define NCURSES_MOUSE_VERSION
-# endif
-#endif
+# define CURSES_DARK_GRAY    17
+# define MAP_SCROLLBARS
 
 
 typedef enum orient_type {
@@ -65,6 +57,107 @@ enum roletyp {
     CR_SPECIAL,
 };
 
+/* Window type */
+enum curswintyp {
+    CW_BASE, /* stdscr */
+    CW_SPLASH, /* initial screen you see on startup (assuming no save) */
+    CW_FRAME,
+    CW_MSG,
+    CW_MAP,
+    CW_STATUS,
+    /* The sidebar needs a seperate type, it can't use CW_MENU, because we want
+       inventory requests to draw its own menu rather than messing with the
+       sidebar, and this also liberates us from special casing menu setup. */
+    CW_INV,
+    CW_ROLE,
+    CW_GETLIN,
+    CW_MENU,
+    CW_TEXT,
+    CW_COUNT,
+    /* Only 1 of these should exist at any time. If a 2nd is attempted to be
+       created, a fatal error is thrown. */
+    CW_FIRST_MAIN = CW_BASE,
+    CW_LAST_MAIN = CW_ROLE,
+};
+
+# define curses_is_mainwin(typ)                         \
+    ((typ) >= CW_FIRST_MAIN && (typ) <= CW_LAST_MAIN)
+
+/* Curses window info. Curses windows are a linked list of windows, in the order
+   of when they were created. Upon a refresh, windows are sequentially refreshed
+   (using the refresh callback) from first to last. If refresh isn't defined,
+   wnoutrefresh will be called instead, potentially twice in case a border is
+   involved (once for a temporary window just for the border). Resize being
+   undefined will cause a fatal error. */
+struct curswin {
+    struct curswin *next;
+    WINDOW *uwin; /* uncursed window */
+    enum curswintyp typ;
+    winid id; /* window ID */
+    boolean border;
+    attr_t border_attr; /* potential special border attribute */
+    orient align;
+    struct curswin *win_align;
+    /* TRUE if align+wid_align means "align *from* wid rather than *onto* it"
+       (if align is CENTER and xy 0, this is ignored) */
+    boolean align_outside_wid;
+
+    /* These are suggested sizes. Use uwin to check real dimensions. uwin data
+       does not include the border, nor does height/width. x/y positioning,
+       however, does (so if you set them to 1,1, the actual window starts at
+       2,2) */
+    /* height/width -1 means "cover the rest of the screen/window" */
+    int height;
+    int width;
+    /* 0: use align, >0: from top/left, <0: from bottom/right */
+    int x;
+    int y;
+    void (*resize) (struct curswin *); /* called upon a screen resize */
+    void (*refresh) (struct curswin *); /* called upon refreshing */
+    void *extra; /* extra data specific to certain window types */
+};
+
+/* struct grouping curses globals */
+struct cursstate {
+    boolean ingame; /* whether or not we are ingame */
+    int in_error; /* 0: no error, 1: nonfatal, 2: fatal */
+     /* If we're in resize logic. Causes key input to pass KEY_RESIZE directly
+        rather than trying to handle it. This is used to prevent an unbounded
+        stack chain: window too small -> resize -> -> too small -> ... */
+    boolean in_resize;
+
+    /*
+     * Border can be one of:
+     * 0: None
+     * 1: Windows/menus only
+     * 2: Everywhere except the outer game frame
+     * 3: Everywhere
+     * Border will automatically be set to 1 on init/resize if they don't fit,
+     * otherwise it will respect the iflags.windowborder variable
+     */
+    int border;
+    int frame; /* color of the main frame */
+
+    /* orient left/right will revert to top (msg)/bottom (status), the defaults,
+       if the selected orientation doesn't fit. */
+    orient msgorient;
+    orient statorient;
+
+    /* usually respects perm_invent, might be disabled if it doesn't fit */
+    boolean sidebar;
+
+    /* The game doesn't tell us if sidebar state changes... so keep track of
+       old state here. Used to figure out if we need to redraw to try to fit
+       it in, so we don't constantly try to fit it in just because the option
+       is inconsistent with reality because it doesn't fit. */
+    boolean last_perm_invent;
+    struct curswin *basewin;
+    struct curswin *winlist;
+    int next_wid; /* next window ID */
+};
+
+struct cursstate curses_state;
+
 /* cursmain.c */
 
 extern struct window_procs curses_procs;
@@ -85,8 +178,8 @@ extern void curses_putstr(winid wid, int attr, const char *text);
 extern void curses_display_file(const char *filename,BOOLEAN_P must_exist);
 extern void curses_start_menu(winid wid);
 extern void curses_add_menu(winid wid, int glyph, const ANY_P * identifier,
-		CHAR_P accelerator, CHAR_P group_accel, int attr, 
-		const char *str, BOOLEAN_P presel);
+                            CHAR_P accelerator, CHAR_P group_accel, int attr,
+                            const char *str, BOOLEAN_P presel);
 extern void curses_end_menu(winid wid, const char *prompt);
 extern int curses_select_menu(winid wid, int how, MENU_ITEM_P **selected);
 extern void curses_update_inventory(void);
@@ -100,7 +193,8 @@ extern int curses_nhgetch(void);
 extern int curses_nh_poskey(int *x, int *y, int *mod);
 extern void curses_nhbell(void);
 extern int curses_doprev_message(void);
-extern char curses_yn_function(const char *question, const char *choices, CHAR_P def);
+extern char curses_yn_function(const char *question, const char *choices,
+                               CHAR_P def);
 extern void curses_getlin(const char *question, char *input);
 extern int curses_get_ext_cmd(void);
 extern void curses_number_pad(int state);
@@ -143,7 +237,8 @@ extern boolean curses_map_borders(int *sx, int *sy, int *ex, int *ey,
 extern void curses_redraw(void (*callback) (void *), void *arg);
 extern int curses_getch(WINDOW *, void (*callback) (void *), void *arg);
 extern int curses_read_char(void);
-extern void curses_toggle_color_attr(WINDOW *win, int color, int attr, int onoff);
+extern void curses_toggle_color_attr(WINDOW *win, int color, int attr,
+                                     int onoff);
 extern void curses_bail(const char *mesg);
 extern winid curses_get_wid(int type);
 extern char *curses_copy_of(const char *s);
@@ -169,14 +264,16 @@ extern int curses_get_mouse(int *mousex, int *mousey, int *mod);
 extern void curses_line_input_dialog(const char *prompt, char *answer,
                                      int buffer, void (*callback) (void *),
                                      void *arg);
-extern int curses_character_input_dialog(const char *prompt, const char *choices, CHAR_P def);
+extern int curses_character_input_dialog(const char *prompt,
+                                         const char *choices, CHAR_P def);
 extern int curses_ext_cmd(void);
 extern void curses_create_nhmenu(winid wid);
-#ifdef MENU_COLOR
+# ifdef MENU_COLOR
 extern boolean get_menu_coloring(char *, int *, int *);
-#endif
-extern void curses_add_nhmenu_item(winid wid, int glyph, const ANY_P *identifier,
-                                   CHAR_P accelerator, CHAR_P group_accel, int attr,
+# endif
+extern void curses_add_nhmenu_item(winid wid, int glyph,
+                                   const ANY_P *identifier, CHAR_P accelerator,
+                                   CHAR_P group_accel, int attr,
                                    const char *str, BOOLEAN_P presel);
 extern void curses_finalize_nhmenu(winid wid, const char *prompt);
 extern int curses_display_nhmenu(winid wid, int how, MENU_ITEM_P **_selected,
