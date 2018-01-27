@@ -16,7 +16,7 @@ typedef struct nhs {
     int highlight_color;
 } nhstat;
 
-static attr_t get_trouble_color(const char *);
+static attr_t get_trouble_color(const char *, int *);
 static void draw_trouble_str(const char *);
 static void print_statdiff(const char *append, nhstat *, int, int);
 static void get_playerrank(char *);
@@ -65,46 +65,53 @@ static nhstat prevscore;
 extern const char *hu_stat[];   /* from eat.c */
 extern const char *enc_stat[];  /* from botl.c */
 
-/* If the statuscolors patch isn't enabled, have some default colors for status problems
-   anyway */
+/* If the statuscolors patch isn't enabled, have some default colors for status
+   problems anyway. Also handles the frame color. */
 
 struct statcolor {
     const char *txt; /* For status problems */
     int color; /* Default color assuming STATUS_COLORS isn't enabled */
+    int frame; /* frame color (use CLR_GRAY for "no change") */
 };
 
 static const struct statcolor default_colors[] = {
-    {"Satiated", CLR_YELLOW},
-    {"Hungry", CLR_YELLOW},
-    {"Weak", CLR_ORANGE},
-    {"Fainted", CLR_BRIGHT_MAGENTA},
-    {"Fainting", CLR_BRIGHT_MAGENTA},
-    {"Burdened", CLR_RED},
-    {"Stressed", CLR_RED},
-    {"Strained", CLR_ORANGE},
-    {"Overtaxed", CLR_ORANGE},
-    {"Overloaded", CLR_BRIGHT_MAGENTA},
-    {"Conf", CLR_BRIGHT_BLUE},
-    {"Blind", CLR_BRIGHT_BLUE},
-    {"Stun", CLR_BRIGHT_BLUE},
-    {"Hallu", CLR_BRIGHT_BLUE},
-    {"Ill", CLR_BRIGHT_MAGENTA},
-    {"FoodPois", CLR_BRIGHT_MAGENTA},
-    {"Slime", CLR_BRIGHT_MAGENTA},
-    {NULL, NO_COLOR},
+    {"Satiated", CLR_YELLOW, CLR_GRAY},
+    {"Hungry", CLR_YELLOW, CLR_GRAY},
+    {"Weak", CLR_ORANGE, CLR_BROWN},
+    {"Fainted", CLR_BRIGHT_MAGENTA, CLR_MAGENTA},
+    {"Fainting", CLR_BRIGHT_MAGENTA, CLR_MAGENTA},
+    {"Burdened", CLR_RED, CLR_GRAY},
+    {"Stressed", CLR_RED, CLR_GRAY},
+    {"Strained", CLR_ORANGE, CLR_GRAY},
+    {"Overtaxed", CLR_ORANGE, CLR_GRAY},
+    {"Overloaded", CLR_BRIGHT_MAGENTA, CLR_GRAY},
+    {"Conf", CLR_BRIGHT_BLUE, CLR_GRAY},
+    {"Blind", CLR_BRIGHT_BLUE, CLR_GRAY},
+    {"Stun", CLR_BRIGHT_BLUE, CLR_GRAY},
+    {"Hallu", CLR_BRIGHT_BLUE, CLR_GRAY},
+    {"Ill", CLR_BRIGHT_MAGENTA, CLR_BRIGHT_MAGENTA},
+    {"FoodPois", CLR_BRIGHT_MAGENTA, CLR_BRIGHT_MAGENTA},
+    {"Slime", CLR_BRIGHT_MAGENTA, CLR_BRIGHT_MAGENTA},
+    {NULL, NO_COLOR, CLR_GRAY},
 };
 
 static attr_t
-get_trouble_color(const char *stat)
+get_trouble_color(const char *stat, int *frame)
 {
     attr_t res = curses_color_attr(CLR_GRAY, 0);
     const struct statcolor *clr;
     for (clr = default_colors; clr->txt; clr++) {
         if (stat && !strcmp(clr->txt, stat)) {
+            if (frame)
+                *frame = clr->frame;
+
 #ifdef STATUS_COLORS
             /* Check if we have a color enabled with statuscolors */
-            if (!iflags.use_status_colors)
+            if (!iflags.use_status_colors) {
+                if (frame)
+                    *frame = CLR_GRAY;
                 return curses_color_attr(CLR_GRAY, 0); /* no color configured */
+            }
 
             struct color_option stat_color;
 
@@ -202,10 +209,25 @@ draw_trouble_str(const char *str)
 {
     WINDOW *win = curses_get_nhwin(STATUS_WIN);
 
-    attr_t attr = get_trouble_color(str);
+    int frame = CLR_GRAY;
+    attr_t attr = get_trouble_color(str, &frame);
     wattron(win, attr);
     wprintw(win, "%s", str);
     wattroff(win, attr);
+
+    /* TODO: better frame color priority management, this list is hardcoded
+       with how the colors were set up when this was added */
+    int colors[] = {
+        CLR_BLACK, CLR_RED, CLR_BRIGHT_MAGENTA, CLR_ORANGE,
+        CLR_YELLOW, CLR_BROWN,
+    };
+
+    int i;
+    for (i = 0; i < SIZE(colors); i++)
+        if (curses_state.frame == colors[i])
+            return;
+
+    curses_state.frame = frame;
 }
 
 /* Returns a ncurses attribute for foreground and background.
@@ -304,6 +326,16 @@ draw_bar(boolean is_hp, int cur, int max, const char *title)
     fillattr = curses_color_attr(color, invcolor);
     attr = curses_color_attr(color, 0);
 
+    /* Update frame color if we're dealing with HP */
+    if (is_hp) {
+        if (cur * 7 <= max)
+            curses_state.frame = CLR_RED;
+        else if (cur * 3 <= max)
+            curses_state.frame = CLR_ORANGE;
+        else if (cur * 3 <= max * 2)
+            curses_state.frame = CLR_YELLOW;
+    }
+
 #ifdef STATUS_COLORS
     if (!iflags.hitpointbar) {
         if (title)
@@ -349,9 +381,14 @@ void
 curses_update_stats(void)
 {
     WINDOW *win = curses_get_nhwin(STATUS_WIN);
+    if (!win)
+        return;
 
     /* Clear the window */
     werase(win);
+
+    /* Reset frame color */
+    curses_state.frame = CLR_GRAY;
 
     int orient = curses_get_window_orientation(STATUS_WIN);
 
@@ -398,8 +435,6 @@ curses_update_stats(void)
         draw_horizontal(x, y, hp, hpmax);
     else
         draw_vertical(x, y, hp, hpmax);
-
-    wnoutrefresh(win);
 
     if (first) {
         first = FALSE;
@@ -473,13 +508,13 @@ draw_horizontal(int x, int y, int hp, int hpmax)
     hpattr = curses_color_attr(hpcolor, 0);
     pwattr = curses_color_attr(pwcolor, 0);
 #endif
-    wprintw(win, " HP:");
     wattron(win, hpattr);
+    wprintw(win, " HP:");
     wprintw(win, "%d(%d)", hp, hpmax);
     wattroff(win, hpattr);
 
-    wprintw(win, " Pw:");
     wattron(win, pwattr);
+    wprintw(win, " Pw:");
     wprintw(win, "%d(%d)", u.uen, u.uenmax);
     wattroff(win, pwattr);
 
@@ -527,7 +562,21 @@ draw_horizontal_new(int x, int y, int hp, int hpmax)
     /* Line 2 */
     y++;
     wmove(win, y, x);
+
+    attr_t hpattr, pwattr;
+#ifdef STATUS_COLORS
+    hpattr = hpen_color_attr(TRUE, hp, hpmax);
+    pwattr = hpen_color_attr(FALSE, u.uen, u.uenmax);
+#else
+    int hpcolor, pwcolor;
+    hpcolor = hpen_color(TRUE, hp, hpmax);
+    pwcolor = hpen_color(FALSE, u.uen, u.uenmax);
+    hpattr = curses_color_attr(hpcolor, 0);
+    pwattr = curses_color_attr(pwcolor, 0);
+#endif
+    wattron(win, hpattr);
     wprintw(win, "HP:");
+    wattroff(win, hpattr);
     draw_bar(TRUE, hp, hpmax, NULL);
     print_statdiff(" AC:", &prevac, u.uac, STAT_AC);
     if (Upolyd)
@@ -571,7 +620,9 @@ draw_horizontal_new(int x, int y, int hp, int hpmax)
     /* Line 3 */
     y++;
     wmove(win, y, x);
+    wattron(win, pwattr);
     wprintw(win, "Pw:");
+    wattroff(win, pwattr);
     draw_bar(FALSE, u.uen, u.uenmax, NULL);
 
 #ifndef GOLDOBJ
@@ -707,14 +758,14 @@ draw_vertical(int x, int y, int hp, int hpmax)
     pwattr = curses_color_attr(pwcolor, 0);
 #endif
 
-    wprintw(win,   "Hit Points:    ");
     wattron(win, hpattr);
+    wprintw(win,   "Hit Points:    ");
     wprintw(win, "%d/%d", hp, hpmax);
     wattroff(win, hpattr);
     wmove(win, y++, x);
 
-    wprintw(win,   "Magic Power:   ");
     wattron(win, pwattr);
+    wprintw(win,   "Magic Power:   ");
     wprintw(win, "%d/%d", u.uen, u.uenmax);
     wattroff(win, pwattr);
     wmove(win, y++, x);

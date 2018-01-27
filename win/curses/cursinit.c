@@ -225,6 +225,8 @@ draw_frame(int rows, int cols, xchar linedrawing[rows][cols])
 {
     int x, y;
     const cchar_t *ch;
+
+    attron(COLOR_PAIR(FRAME_PAIR));
     for (x = 0; x < cols; x++) {
         for (y = 0; y < rows; y++) {
             if (!linedrawing[y][x]) {
@@ -235,6 +237,7 @@ draw_frame(int rows, int cols, xchar linedrawing[rows][cols])
             mvadd_wch(y, x, linedrawchs(linedrawing[y][x]));
         }
     }
+    attroff(COLOR_PAIR(FRAME_PAIR));
 
     refresh();
 }
@@ -280,36 +283,43 @@ add_frame(int begy, int begx, int h, int w,
 void
 curses_create_main_windows()
 {
+    int mincols = 80;
+    int minlines = 24;
+    if (!iflags.classic_status)
+        minlines = 25;
+
+    while (COLS < mincols || LINES < minlines) {
+        erase();
+        mvaddstr(0, 0, "This game requires a terminal");
+        mvprintw(1, 0, "size of at least 80x%s to",
+                 iflags.classic_status ? "24" : "25");
+        mvaddstr(2, 0, "function.");
+        mvprintw(3, 0, "Current: %dx%d", COLS, LINES);
+        getch();
+    }
+
     /* Attempt to set up window positions up to 3 times depending
        on border setting. If complete frames didn't work, try
        without the outer frame. If that didn't work either, try
        without borders (except in menus). Should that also fail,
        our terminal is too small. */
     int border = iflags.wc2_windowborders;
-    curses_state.in_resize = TRUE;
+    if (border > 3 || border < 0)
+        border = 3;
+
     do {
-        if (border > 3 || border < 0)
-            border = 3;
+        if (curses_setup_mainwins(border)) {
+            curses_state.border = border;
+            curses_state.in_resize = FALSE;
+            return; /* success */
+        }
 
-        do {
-            if (curses_setup_mainwins(border)) {
-                curses_state.border = border;
-                curses_state.in_resize = FALSE;
-                return; /* success */
-            }
+        border--;
+    } while (border > 0);
 
-            border--;
-        } while (border > 1);
-
-        /* Our window is too small... */
-        erase();
-        mvaddstr(0, 0, "This game requires a terminal");
-        mvaddstr(1, 0, "size of at least 80x24 to");
-        mvaddstr(2, 0, "function.");
-        mvprintw(3, 0, "Current: %dx%d", LINES, COLS);
-        getch();
-        refresh();
-    } while (TRUE);
+    /* this code should be unreachable */
+    if (border)
+        panic("Terminal resize failed!");
 }
 
 static boolean
@@ -318,8 +328,8 @@ curses_setup_mainwins(int border)
     /* Set up frame map */
     int x, y;
     int rows, cols, begx, begy;
-    xchar linedrawing[LINES][COLS];
-    memset(linedrawing, 0, sizeof (linedrawing[0][0]) * LINES * COLS);
+    xchar linedrawing[LINES * COLS];
+    memset(linedrawing, 0, sizeof (linedrawing[0]) * LINES * COLS);
     rows = LINES;
     cols = COLS;
     begx = 0;
@@ -329,8 +339,8 @@ curses_setup_mainwins(int border)
         cols -= 2;
         begx++;
         begy++;
-        add_frame(begy - 1, begx - 1, rows + 1, cols + 1,
-                  LINES, COLS, linedrawing);
+        curses_addframe(stdscr, begy - 1, begx - 1, rows + 1, cols + 1,
+                        linedrawing);
     }
 
     /* We can't try to account for status/message here since
@@ -505,9 +515,9 @@ curses_setup_mainwins(int border)
         invx = begy + cols - invw;
 
         cols -= invw + bsp;
-        if (border)
-            add_frame(invy - 1, invx - 1, invh + 1, invw + 1,
-                      LINES, COLS, linedrawing);
+        if (border > 1)
+            curses_addframe(stdscr, invy - 1, invx - 1, invh + 1, invw + 1,
+                            linedrawing);
     }
 
     /* Message window */
@@ -555,9 +565,9 @@ curses_setup_mainwins(int border)
         break;
     }
 
-    if (border)
-        add_frame(msgy - 1, msgx - 1, msgh + 1, msgw + 1,
-                  LINES, COLS, linedrawing);
+    if (border > 1)
+        curses_addframe(stdscr, msgy - 1, msgx - 1, msgh + 1, msgw + 1,
+                        linedrawing);
 
     /* Status window */
     stath = rows;
@@ -596,14 +606,17 @@ curses_setup_mainwins(int border)
         break;
     }
 
-    if (border) {
-        add_frame(staty - 1, statx - 1, stath + 1, statw + 1,
-                  LINES, COLS, linedrawing);
-        add_frame(begy - 1, begx - 1, rows + 1, cols + 1,
-                  LINES, COLS, linedrawing);
+    if (border > 1) {
+        curses_addframe(stdscr, staty - 1, statx - 1, stath + 1, statw + 1,
+                        linedrawing);
+        curses_addframe(stdscr, begy - 1, begx - 1, rows + 1, cols + 1,
+                        linedrawing);
     }
 
-    draw_frame(LINES, COLS, linedrawing);
+    if (curses_state.ingame)
+        curses_drawframe(stdscr, COLOR_PAIR(FRAME_PAIR), linedrawing);
+    else
+        curses_display_splash_window(FALSE);
 
     curses_add_nhwin(STATUS_WIN, stath, statw, staty, statx,
                      statalign, FALSE);
@@ -642,7 +655,10 @@ curses_init_nhcolors()
            one to a higher color pair. So assign a color pair way
            beyond the range we will use, to make libuncursed do
            the right thing when we assign the pairs we will use. */
-        init_pair(500, COLOR_BLACK, COLOR_BLACK);
+        init_pair(HIGH_PAIR, COLOR_BLACK, COLOR_BLACK);
+
+        /* default frame color */
+        curses_state.frame = CLR_GRAY;
 
         int fgcolor = 0;
         int bgcolor = 0;
@@ -1425,7 +1441,7 @@ curses_choose_character(void)
     winid win;
     anything any;
     int n;
-    menu_item *selected = 0;
+    menu_item *selected = NULL;
     int quitcnt = 3;
 
     /* Prepare a random starting selection for 'y' or what 'n'
@@ -1637,6 +1653,7 @@ curses_display_splash_window(boolean count_only)
     int which_variant = NETHACK_CURSES; /* Default to NetHack */
     boolean splash = TRUE;
 
+    clear();
     if ((term_cols < 70) || (term_rows < 20))
         splash = FALSE; /* No room for splash screen */
 

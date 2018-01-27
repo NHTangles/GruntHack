@@ -103,7 +103,8 @@ curses_init_nhwindows(int *argcp, char **argv)
         snprintf(window_title, BUFSZ, "%s %s", game, versionstr);
 
     uncursed_set_title(window_title);
-    initscr();
+    struct curswin *basewin = curswin_new(BASE_WIN);
+    basewin->uwin = initscr();
     if (has_colors()) {
         start_color();
         curses_init_nhcolors();
@@ -113,13 +114,13 @@ curses_init_nhwindows(int *argcp, char **argv)
         iflags.wc2_guicolor = FALSE;
         set_wc2_option_mod_status(WC2_GUICOLOR, SET_IN_FILE);
     }
+
+    memset(&curses_state, 0, sizeof (struct cursstate));
+    curses_state.next_wid = NHWIN_MAX;
+
     raw();
     getmaxyx(stdscr, term_rows, term_cols);
     curses_init_options();
-    if ((term_rows < 15) || (term_cols < 40)) {
-        panic("Terminal too small.  Must be minumum 40 width and 15 height");
-    }
-
     curses_redraw(NULL, NULL);
 }
 
@@ -183,7 +184,7 @@ curses_resume_nhwindows()
     curses_refresh_nethack_windows();
 }
 
-/*  Create a window of type "type" which can be 
+/*  Create a window of type "type" which can be
         NHW_MESSAGE     (top line)
         NHW_STATUS      (bottom lines)
         NHW_MAP         (main dungeon)
@@ -208,7 +209,7 @@ curses_create_nhwindow(int type)
 void
 curses_clear_nhwindow(winid wid)
 {
-    if (wid != NHW_MESSAGE) {
+    if (wid != MESSAGE_WIN) {
         curses_clear_nhwin(wid);
     }
 }
@@ -296,6 +297,11 @@ Attributes
 void
 curses_putstr(winid wid, int attr, const char *text)
 {
+    /* There is no "announcing that we are ingame". So rely on the fact that the
+       first thing that happens is a welcome message. */
+    if (!curses_state.ingame)
+        curses_state.ingame = TRUE;
+
     int curses_attr = curses_convert_attr(attr);
 
     /* We need to convert NetHack attributes to curses attributes */
@@ -522,7 +528,7 @@ curses_print_glyph(winid wid, XCHAR_P x, XCHAR_P y, int glyph)
         ch = curses_convert_glyph(ch, glyph);
     }
 
-    if (wid == NHW_MAP) {
+    if (wid == MAP_WIN) {
         if ((special & MG_STAIRS) && iflags.hilite_hidden_stairs)
             color += COLOR_RED * colors;
         else if ((special & MG_OBJPILE) && iflags.hilite_obj_piles)
@@ -700,7 +706,7 @@ curses_delay_output()
 {
     /* refreshing the whole display is a waste of time,
        but that's why we're here */
-    wnoutrefresh(mapwin);
+    curses_refresh_nethack_windows();
     nanosleep(&(struct timespec){ .tv_nsec = 50 * 1000 * 1000}, NULL);
 }
 

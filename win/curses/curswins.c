@@ -41,6 +41,371 @@ static boolean is_main_window(winid wid);
 static void write_char(WINDOW * win, int x, int y, nethack_char ch);
 static void clear_map(void);
 
+/* Creates a curses window. If id is nonzero, create a base window with the
+   given window ID, or return it if it already exists. Otherwise, create a
+   dialog window. */
+struct curswin *
+curswin_new(winid wid)
+{
+    struct curswin *owin;
+    for (owin = curses_state.winlist; owin; owin = owin->next) {
+        if (wid == owin->id)
+            return owin;
+
+        if (!owin->next)
+            break;
+    }
+
+    struct curswin *win = malloc(sizeof (struct curswin));
+    memset(win, 0, sizeof (struct curswin));
+
+    if (owin)
+        owin->next = win;
+    else
+        curses_state.winlist = win;
+
+    win->align = CENTER;
+    win->redraw = curswin_redraw;
+
+    if (!wid) {
+        win->id = curses_state.next_wid;
+        curses_state.next_wid++;
+        win->typ = CW_DIAL;
+        win->border = !!curses_state.border;
+        win->border_attr = DIALOG_BORDER_ATTR;
+        win->resize = curswin_resize;
+        win->focus = 1;
+    } else {
+        win->id = wid;
+        win->typ = CW_BASE;
+    }
+}
+
+/* Creates a libuncursed window based on xy/alignment/etc.
+   If uwin isn't NULL, it will update the window position but not create a new
+   window. Returns the resulting window. */
+WINDOW *
+curswin_newuwin(struct curswin *win)
+{
+    if (!win->uwin)
+        win->uwin = newwin(1, 1, 0, 0);
+
+    curswin_resize(win);
+    return win->uwin;
+}
+
+/* Deletes a curses window. */
+void
+curswin_del(struct curswin *win)
+{
+    if (!win || win->typ == CW_BASE)
+        return;
+
+    struct curswin *owin;
+    for (owin = curses_state.winlist; owin; owin = owin->next) {
+        if (owin->next == win) {
+            owin->next = win->next;
+            break;
+        } else if (owin == win) {
+            curses_state.winlist = win->next;
+            break;
+        }
+    }
+
+    free(win);
+}
+
+/* Deletes a curses window's uncursed representation. */
+void
+curswin_deluwin(struct curswin *win)
+{
+    if (!win || !win->uwin || win->id == BASE_WIN)
+        return;
+
+    delwin(win->uwin);
+    win->uwin = NULL;
+}
+
+struct curswin *
+curswin_get(winid wid)
+{
+    struct curswin *win;
+    for (win = curses_state.winlist; win; win = win->next)
+        if (win->id == wid)
+            return win;
+
+    return NULL;
+}
+
+WINDOW *
+curswin_getuwin(winid wid)
+{
+    struct curswin *win = curswin_get(wid);
+    if (win)
+        return win->uwin;
+    return NULL;
+}
+
+/* Default redraw/resize functions */
+void
+curswin_redraw(struct curswin *win)
+{
+    if (!win || !win->uwin)
+        return;
+
+    /* border handling */
+    if (win->border) {
+        WINDOW *bwin;
+        int x, y, w, h;
+        getbegyx(win->uwin, y, x);
+        getmaxyx(win->uwin, h, w);
+        y--;
+        x -= 2;
+        h += 2;
+        w += 4;
+        bwin = newwin(h, w, y, x);
+        xchar linedrawing[h * w];
+        memset(linedrawing, 0, sizeof (linedrawing[0]) * h * w);
+        curses_addframe(bwin, y, x, h, w, linedrawing);
+        curses_drawframe(bwin, win->border_attr, linedrawing);
+
+        /* Not for the dedicated count window, it would be redundant. */
+        if (win->focus && win->count && win->id != COUNT_WIN) {
+            mvwprintw(bwin, h - 1, 1, "Count: %d", win->count);
+        }
+
+        wnoutrefresh(bwin);
+        delwin(bwin);
+    }
+
+    curs_set(0);
+    if (win->focus == 2)
+        curs_set(1);
+
+    wnoutrefresh(win->uwin);
+}
+
+void
+curswin_resize(struct curswin *win)
+{
+    int rx, ry, rw, rh; /* real dimensions */
+    int bx, by, bw, bh; /* base to go after */
+    struct curswin *pwin = win->win_align;
+
+    if (win->id == BASE_WIN)
+        return; /* handled by libuncursed */
+
+    if (!pwin || !pwin->uwin)
+        pwin = curswin_get(BASE_WIN);
+
+    getmaxyx(pwin->uwin, bh, bw);
+    getbegyx(pwin->uwin, by, bx);
+    if (pwin->border) {
+        bx -= 2;
+        by -= 1;
+        bw += 4;
+        bh += 2;
+    }
+
+    rx = win->x;
+    ry = win->y;
+    rw = win->width;
+    rh = win->height;
+    if (win->border) {
+        if (rw)
+            rw += 4;
+        if (rh)
+            rh += 2;
+    }
+
+    if (rx < 0)
+        rx = bw - rw;
+    else
+        rx--;
+    if (ry < 0)
+        ry = bh - rh;
+    else
+        ry--;
+
+    if (!rx || !ry) {
+        switch (win->align) {
+        case CENTER:
+        default:
+            if (rx == -1)
+                rx = (bw - rw) / 2;
+            if (ry == -1)
+                ry = (bh - rh) / 2;
+            break;
+        case DOWN:
+            ry = bh - rh;
+        case UP:
+            if (rx == -1)
+                rx = (bw - rw) / 2;
+            break;
+        case RIGHT:
+            rx = bw - rw;
+        case LEFT:
+            if (ry == -1)
+                ry = (bh - rh) / 2;
+            break;
+        }
+    }
+
+    /* Ensure that the window fits */
+    while ((rx + rw) > bw)
+        rx--;
+    while ((ry + rh) > bh)
+        ry--;
+
+    if (!rw || rx < 0) {
+        rw = bw;
+        rx = 0;
+    }
+    if (!rh || ry < 0) {
+        rh = bh;
+        ry = 0;
+    }
+
+    rx += bx;
+    ry += by;
+
+    mvwin(win->uwin, ry, rx);
+}
+
+/* Redraws all windows. */
+void
+curses_redraw2(void)
+{
+    struct curswin *win;
+    struct curswin *focus = curswin_get(MAP_WIN);
+    for (win = curses_state.winlist; win; win = win->next) {
+        if (win->focus)
+            focus = win;
+        if (win->redraw)
+            win->redraw(win);
+    }
+
+    if (focus) {
+        if (focus->redraw)
+            focus->redraw(focus);
+        else
+            curswin_redraw(focus);
+    }
+
+    doupdate();
+}
+
+/* Resizes all windows. */
+void
+curses_resize(void)
+{
+    curses_create_main_windows();
+    curses_last_messages();
+    doredraw();
+
+    struct curswin *win;
+    for (win = curses_state.winlist; win; win = win->next)
+        if (win->resize)
+            win->resize(win);
+
+    curses_redraw2();
+}
+
+/* Line drawing: mainframe and borders */
+
+#define getlinedraw(ld, y, x, h, w) (ld[(x) * (h) + (y)])
+#define addlinedraw(ld, y, x, h, w, val)        \
+    do {                                        \
+        if (x >= 0 && y >= 0 && x < w && y < h) \
+            ld[(x) * (h) + (y)] |= val;         \
+    } while (0)
+#define LDW_UP 1
+#define LDW_RIGHT 2
+#define LDW_DOWN 4
+#define LDW_LEFT 8
+
+static const cchar_t *
+linedrawch(int dir)
+{
+    switch (dir) {
+    case (LDW_UP | LDW_RIGHT):
+        return WACS_LLCORNER;
+    case (LDW_UP | LDW_DOWN):
+        return WACS_VLINE;
+    case (LDW_UP | LDW_LEFT):
+        return WACS_LRCORNER;
+    case (LDW_RIGHT | LDW_DOWN):
+        return WACS_ULCORNER;
+    case (LDW_RIGHT | LDW_LEFT):
+        return WACS_HLINE;
+    case (LDW_DOWN | LDW_LEFT):
+        return WACS_URCORNER;
+    case (LDW_UP | LDW_RIGHT | LDW_DOWN):
+        return WACS_LTEE;
+    case (LDW_UP | LDW_RIGHT | LDW_LEFT):
+        return WACS_BTEE;
+    case (LDW_UP | LDW_DOWN | LDW_LEFT):
+        return WACS_RTEE;
+    case (LDW_RIGHT | LDW_DOWN | LDW_LEFT):
+        return WACS_TTEE;
+    default:
+    case (LDW_UP | LDW_LEFT | LDW_DOWN | LDW_RIGHT):
+        return WACS_PLUS;
+    }
+}
+
+/* Draws a frame for the given window with the given attribute */
+void
+curses_drawframe(WINDOW *win, attr_t attr, xchar *ld)
+{
+    if (!win)
+        return;
+
+    int y, x, h, w;
+    getmaxyx(win, h, w);
+    wattron(win, attr);
+    for (x = 0; x < w; x++) {
+        for (y = 0; y < h; y++) {
+            if (!getlinedraw(ld, y, x, h, w))
+                mvwaddch(win, y, x, ' ');
+            else
+                mvwadd_wch(win, y, x,
+                           linedrawch(getlinedraw(ld, y, x, h, w)));
+        }
+    }
+    wattroff(win, attr);
+}
+
+/* Add a frame for the given window. */
+void
+curses_addframe(WINDOW *win, int begy, int begx, int h, int w,
+                xchar *ld)
+{
+    int y, x, wh, ww;
+    if (!win || !h || !w)
+        return;
+
+    getmaxyx(win, wh, ww);
+
+    /* corners */
+    addlinedraw(ld, begy, begx, wh, ww, LDW_DOWN | LDW_RIGHT);
+    addlinedraw(ld, begy + h, begx, wh, ww, LDW_UP | LDW_RIGHT);
+    addlinedraw(ld, begy, begx + w, wh, ww, LDW_DOWN | LDW_LEFT);
+    addlinedraw(ld, begy + h, begx + w, wh, ww, LDW_UP | LDW_LEFT);
+
+    /* vertical lines */
+    for (y = begy + 1; y < (begy + h); y++) {
+        addlinedraw(ld, y, begx, wh, ww, LDW_UP | LDW_DOWN);
+        addlinedraw(ld, y, begx + w, wh, ww, LDW_UP | LDW_DOWN);
+    }
+
+    /* horizontal lines */
+    for (x = begx + 1; x < (begx + w); x++) {
+        addlinedraw(ld, begy, x, wh, ww, LDW_LEFT | LDW_RIGHT);
+        addlinedraw(ld, begy + h, x, wh, ww, LDW_LEFT | LDW_RIGHT);
+    }
+}
+
 /* Create a window with the specified size and orientation */
 
 WINDOW *
@@ -163,8 +528,6 @@ curses_create_window(int width, int height, orient orientation)
 void
 curses_destroy_win(WINDOW * win)
 {
-    werase(win);
-    wrefresh(win);
     delwin(win);
     curses_refresh_nethack_windows();
 }
@@ -175,36 +538,24 @@ curses_destroy_win(WINDOW * win)
 void
 curses_refresh_nethack_windows()
 {
-    WINDOW *status_window, *message_window, *map_window, *inv_window;
     WINDOW *count_window;
 
-    status_window = curses_get_nhwin(STATUS_WIN);
-    message_window = curses_get_nhwin(MESSAGE_WIN);
-    map_window = curses_get_nhwin(MAP_WIN);
-    inv_window = curses_get_nhwin(INV_WIN);
-    count_window = curses_get_nhwin(COUNT_WIN);
+    int framecolor = curses_state.frame;
+#ifdef STATUS_COLORS
+    if (!iflags.use_status_colors)
+        framecolor = CLR_GRAY;
+#endif
+    if (!framecolor)
+        framecolor = 8; /* dark gray */
 
-    if ((moves <= 1) && !invent) {
-        /* Main windows not yet displayed; refresh base window instead */
-        touchwin(stdscr);
-        refresh();
-    } else {
-        touchwin(status_window);
-        wnoutrefresh(status_window);
-        touchwin(map_window);
-        wnoutrefresh(map_window);
-        touchwin(message_window);
-        wnoutrefresh(message_window);
-        if (inv_window) {
-            touchwin(inv_window);
-            wnoutrefresh(inv_window);
-        }
-        if (count_window) {
-            touchwin(count_window);
-            wnoutrefresh(count_window);
-        }
-        doupdate();
-    }
+    init_pair(FRAME_PAIR, framecolor, COLOR_BLACK);
+    wnoutrefresh(stdscr);
+
+    count_window = curses_get_nhwin(COUNT_WIN);
+    if (count_window)
+        wnoutrefresh(count_window);
+
+    doupdate();
 }
 
 /* Sets curwin to the given window. */
@@ -252,7 +603,11 @@ curses_add_nhwin(winid wid, int height, int width, int y, int x,
         real_height += 2;
     }
 
-    win = newwin(real_height, real_width, y, x);
+    /* Main windows are subwindows of the base window */
+    if (wid < NHWIN_MAX && wid != COUNT_WIN && 0)
+        win = derwin(stdscr, real_height, real_width, y, x);
+    else
+        win = newwin(real_height, real_width, y, x);
 
     switch (wid) {
     case MESSAGE_WIN:
@@ -511,10 +866,8 @@ curses_puts(winid wid, int attr, const char *text)
         identifier->a_void = NULL;
         curses_add_nhmenu_item(wid, NO_GLYPH, identifier, 0, 0, attr, text,
                                FALSE);
-    } else {
+    } else
         waddstr(win, text);
-        wnoutrefresh(win);
-    }
 }
 
 
@@ -544,14 +897,12 @@ curses_alert_win_border(winid wid, boolean onoff)
 {
     WINDOW *win = curses_get_nhwin(wid);
 
-    if (!win || !curses_window_has_border(wid))
+    if (!win)
         return;
     if (onoff)
-        curses_toggle_color_attr(win, ALERT_BORDER_COLOR, NONE, ON);
-    box(win, 0, 0);
-    if (onoff)
-        curses_toggle_color_attr(win, ALERT_BORDER_COLOR, NONE, OFF);
-    wnoutrefresh(win);
+        curses_state.frame = ALERT_BORDER_COLOR;
+    else
+        curses_update_stats(); /* sets frame color */
 }
 
 

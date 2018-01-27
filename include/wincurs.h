@@ -19,23 +19,28 @@ WINDOW *mapwin, *statuswin, *messagewin;    /* Main windows */
 # define NONE -1
 # define DIALOG_BORDER_COLOR CLR_MAGENTA
 # define ALERT_BORDER_COLOR CLR_RED
+# define DIALOG_BORDER_ATTR curses_color_attr(DIALOG_BORDER_COLOR, 0)
 # define SCROLLBAR_COLOR CLR_MAGENTA
 # define SCROLLBAR_BACK_COLOR CLR_BLACK
 # define HIGHLIGHT_COLOR CLR_WHITE
 # define MORECOLOR CLR_ORANGE
 # define STAT_UP_COLOR CLR_GREEN
 # define STAT_DOWN_COLOR CLR_RED
-# define MESSAGE_WIN 1
-# define STATUS_WIN  2
-# define MAP_WIN     3
-# define INV_WIN     4
-# define COUNT_WIN   5
-# define NHWIN_MAX   6
+
+# define BASE_WIN    1
+# define MESSAGE_WIN 2
+# define STATUS_WIN  3
+# define MAP_WIN     4
+# define INV_WIN     5
+# define COUNT_WIN   6
+# define OTHER_WIN   7
+# define NHWIN_MAX   8
 # define MESG_HISTORY_MAX   200
 # define USE_DARKGRAY /* Allow "bright" black; delete if not visible */
 # define CURSES_DARK_GRAY    17
 # define MAP_SCROLLBARS
-
+# define FRAME_PAIR 499
+# define HIGH_PAIR 500 /* see cursinit.c */
 
 typedef enum orient_type {
     CENTER,
@@ -59,25 +64,8 @@ enum roletyp {
 
 /* Window type */
 enum curswintyp {
-    CW_BASE, /* stdscr */
-    CW_SPLASH, /* initial screen you see on startup (assuming no save) */
-    CW_FRAME,
-    CW_MSG,
-    CW_MAP,
-    CW_STATUS,
-    /* The sidebar needs a seperate type, it can't use CW_MENU, because we want
-       inventory requests to draw its own menu rather than messing with the
-       sidebar, and this also liberates us from special casing menu setup. */
-    CW_INV,
-    CW_ROLE,
-    CW_GETLIN,
-    CW_MENU,
-    CW_TEXT,
-    CW_COUNT,
-    /* Only 1 of these should exist at any time. If a 2nd is attempted to be
-       created, a fatal error is thrown. */
-    CW_FIRST_MAIN = CW_BASE,
-    CW_LAST_MAIN = CW_ROLE,
+    CW_BASE,
+    CW_DIAL,
 };
 
 # define curses_is_mainwin(typ)                         \
@@ -94,26 +82,39 @@ struct curswin {
     WINDOW *uwin; /* uncursed window */
     enum curswintyp typ;
     winid id; /* window ID */
-    boolean border;
+    boolean border; /* ignored for base windows */
     attr_t border_attr; /* potential special border attribute */
     orient align;
     struct curswin *win_align;
-    /* TRUE if align+wid_align means "align *from* wid rather than *onto* it"
-       (if align is CENTER and xy 0, this is ignored) */
-    boolean align_outside_wid;
+    /* TRUE if align+wid_align means "align *from* win rather than *onto* it"
+7       (if align is CENTER and xy 0, this is ignored) */
+    boolean align_outside_win;
+
+    /* If nonzero, this is drawn on top. If this is
+       also 2, we will draw the cursor here.
+       If no window has this set, the map window
+       will have focus 2 unless any dialog window
+       exist, in which the last one will have focus 1.
+       If more than one window has focus, the last
+       window focus will apply. */
+    int focus;
+
+    /* Whether we're in a counting state, and if so,
+       progress on it. */
+    int count;
 
     /* These are suggested sizes. Use uwin to check real dimensions. uwin data
        does not include the border, nor does height/width. x/y positioning,
        however, does (so if you set them to 1,1, the actual window starts at
-       2,2) */
-    /* height/width -1 means "cover the rest of the screen/window" */
+       3,2; border + horizontal padding) */
+    /* height/width 0 means "cover the rest of the screen/window" */
     int height;
     int width;
     /* 0: use align, >0: from top/left, <0: from bottom/right */
     int x;
     int y;
     void (*resize) (struct curswin *); /* called upon a screen resize */
-    void (*refresh) (struct curswin *); /* called upon refreshing */
+    void (*redraw) (struct curswin *); /* called upon refreshing */
     void *extra; /* extra data specific to certain window types */
 };
 
@@ -151,7 +152,6 @@ struct cursstate {
        it in, so we don't constantly try to fit it in just because the option
        is inconsistent with reality because it doesn't fit. */
     boolean last_perm_invent;
-    struct curswin *basewin;
     struct curswin *winlist;
     int next_wid; /* next window ID */
 };
@@ -207,6 +207,18 @@ extern void curses_preference_update(const char *pref);
 
 /* curswins.c */
 
+extern struct curswin *curswin_new(winid);
+extern WINDOW *curswin_newuwin(struct curswin *);
+extern void curswin_del(struct curswin *);
+extern void curswin_deluwin(struct curswin *);
+extern struct curswin *curswin_get(winid);
+extern WINDOW *curswin_getuwin(winid);
+extern void curswin_redraw(struct curswin *);
+extern void curswin_resize(struct curswin *);
+extern void curses_redraw2(void);
+extern void curses_resize(void);
+extern void curses_drawframe(WINDOW *, attr_t, xchar *);
+extern void curses_addframe(WINDOW *, int, int, int, int, xchar *);
 extern WINDOW *curses_create_window(int width, int height, orient orientation);
 extern void curses_destroy_win(WINDOW *win);
 extern void curses_set_nhwin(winid wid, WINDOW *win);

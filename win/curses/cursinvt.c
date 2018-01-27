@@ -82,10 +82,13 @@ curses_add_inv(int y, int glyph, CHAR_P accelerator, attr_t attr,
             attr |= curses_color_attr(color, 0);
     }
 #endif
-    
+
     wattron(win, attr);
     wprintw(win, "%s", str);
     wattroff(win, attr);
+
+    /* Clear out the rest of the area. We use both clrtoeol + clrtobot to
+       handle menu items that wrap correctly. */
     wclrtoeol(win);
     if (y > win->maxy)
         return;
