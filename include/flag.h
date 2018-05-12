@@ -341,6 +341,9 @@ struct instance_flags {
 #ifdef AUTO_OPEN
 	boolean  autoopen;	/* open doors by walking into them */
 #endif
+  boolean msg_is_alert; /* suggest windowport should grab player's attention
+                         * and request <TAB> acknowlegement */
+
 };
 
 /*

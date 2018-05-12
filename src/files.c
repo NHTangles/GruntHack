@@ -1988,12 +1988,14 @@ char		*tmp_levels;
 	    char msgtype[11];
 	    if (sscanf(bufp, "%10s \"%255[^\"]\"", msgtype, pattern) == 2) {
 		int typ = MSGTYP_NORMAL;
-		if (!strncmpi(msgtype, "norep", 5)) typ = MSGTYP_NOREP;
-		else if (!strncmpi(msgtype, "hide", 4)) typ = MSGTYP_NOSHOW;
-		else if (!strncmpi(msgtype, "noshow", 6)) typ = MSGTYP_NOSHOW;
-		else if (!strncmpi(msgtype, "more", 4)) typ = MSGTYP_STOP;
-		else if (!strncmpi(msgtype, "stop", 4)) typ = MSGTYP_STOP;
-		if (typ != MSGTYP_NORMAL) {
+		if (!strcasecmp("norep", msgtype)) typ = MSGTYP_NOREP;
+		else if (!strcasecmp("hide", msgtype)) typ = MSGTYP_NOSHOW;
+		else if (!strcasecmp("noshow", msgtype)) typ = MSGTYP_NOSHOW;
+		else if (!strcasecmp("more", msgtype)) typ = MSGTYP_STOP;
+		else if (!strcasecmp("stop", msgtype)) typ = MSGTYP_STOP;
+                /* 'alert' will fallback to 'stop' behaviour if windowport does not support it */
+		else if (!strcasecmp("alert", msgtype)) typ = MSGTYP_ALERT;
+		if ((typ != MSGTYP_NORMAL) || !strcasecmp("show", msgtype)) {
 		    msgpline_add(typ, pattern);
 		}
 	    }

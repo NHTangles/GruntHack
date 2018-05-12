@@ -625,6 +625,7 @@ initoptions()
 #ifdef SORTLOOT
 	iflags.sortloot = 'n';
 #endif
+        iflags.msg_is_alert = FALSE;
 
 	for (i = 0; i < NUM_DISCLOSURE_OPTIONS; i++)
 		flags.end_disclose[i] = DISCLOSE_PROMPT_DEFAULT_NO;
