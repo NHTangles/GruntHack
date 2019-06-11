@@ -145,6 +145,7 @@ pline VA_DECL(const char *, line)
 	}
 	iflags.msg_is_alert = FALSE;
 }
+#endif /* MSGTYPE */
 
 /*VARARGS1*/
 void
