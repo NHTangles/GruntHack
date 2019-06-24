@@ -898,7 +898,10 @@ movemon()
 	if(mtmp->movement < NORMAL_SPEED)
 	    continue;
 
-	if (mtmp->mtarget && DEADMONSTER(mtmp->mtarget)) {
+        /* Kludge to work around dangling mtarget pointer */
+        if ((mtmp->mtarget_id == 0 || mtmp->mtarget_id == youmonst.m_id)
+ 
+	  || (mtmp->mtarget && DEADMONSTER(mtmp->mtarget))) {
 	    mtmp->mtarget = (mtmp->mpeaceful || mtmp->mtame)
 	        ? (struct monst *)0 : &youmonst;
 	    mtmp->mtarget_id = (mtmp->mtarget) ? mtmp->mtarget->m_id : 0;

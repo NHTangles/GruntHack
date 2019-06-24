@@ -650,9 +650,11 @@ migrate_to_level(mtmp, tolev, xyloc, cc)
 	mtmp->mx = mtmp->my = 0;	/* this implies migration */
 
 	for (mtmp2 = fmon; mtmp2; mtmp2 = mtmp2->nmon)
-		if (mtmp2->mtarget == mtmp)
+		if (mtmp2->mtarget == mtmp) {
 			mtmp2->mtarget = (mtmp->mtame || mtmp->mpeaceful)
 				? (struct monst *)0 : &youmonst;
+                        mtmp2->mtarget_id = (mtmp2->mtarget) ? mtmp2->mtarget->m_id : 0;
+                }
 }
 
 #endif /* OVLB */
